@@ -83,6 +83,8 @@ export type ClientOnboarding = {
   id: string;
   created_at: string;
   submitted_by: string;
+  lead_id: string | null;
+  client_id: string | null;
   client_name: string;
   client_email: string | null;
   client_contact_number: string | null;

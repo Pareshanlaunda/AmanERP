@@ -1,5 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { UserRole } from "@/lib/types/database";
+
+async function getProfileRole(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+): Promise<UserRole | null> {
+  const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  return (data?.role as UserRole) ?? null;
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -27,10 +36,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
+  const pathname = request.nextUrl.pathname;
+  const isSetupRoute = pathname.startsWith("/setup");
+  const isAuthRoute = pathname.startsWith("/login");
   const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/onboarding");
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/employee");
 
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
@@ -38,10 +51,34 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  if (user) {
+    const role = await getProfileRole(supabase, user.id);
+    const dashboard =
+      role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
+
+    if (isSetupRoute || isAuthRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = dashboard;
+      return NextResponse.redirect(url);
+    }
+
+    if (pathname.startsWith("/dashboard")) {
+      const url = request.nextUrl.clone();
+      url.pathname = dashboard;
+      return NextResponse.redirect(url);
+    }
+
+    if (pathname.startsWith("/admin") && role !== "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/employee/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    if (pathname.startsWith("/employee") && role === "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/dashboard";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

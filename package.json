@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "create-employee": "node --env-file=.env.local scripts/create-employee.mjs",
+    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
+    "backfill-profiles": "node --env-file=.env.local scripts/backfill-profiles.mjs",
+    "migrate": "node --env-file=.env.local scripts/run-migration.mjs",
+    "db:migrate": "npm run migrate",
+    "db:url": "node --env-file=.env.local scripts/discover-database-url.mjs",
+    "db:setup": "node --env-file=.env.local scripts/db-setup.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",
@@ -35,6 +42,7 @@
     "@types/react-dom": "^19.1.6",
     "eslint": "^9.29.0",
     "eslint-config-next": "^15.3.4",
+    "pg": "^8.22.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3"
   }

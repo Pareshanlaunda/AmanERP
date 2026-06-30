@@ -1,0 +1,119 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireUserWithRole } from "@/lib/auth/get-user";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createUserSchema, type CreateUserInput } from "@/lib/validations/users";
+import type { Profile } from "@/lib/types/database";
+
+export type ActionResult = { success: true } | { success: false; error: string };
+
+export async function adminExists(): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { count, error } = await admin
+      .from("profiles")
+      .select("*", { count: "exact", head: true })
+      .eq("role", "admin");
+
+    if (error) {
+      if (error.code === "PGRST205") return false;
+      return false;
+    }
+    return (count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function createUser(data: CreateUserInput): Promise<ActionResult> {
+  await requireUserWithRole(["admin"]);
+
+  const parsed = createUserSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  return createUserWithAdminClient(parsed.data);
+}
+
+export async function createFirstAdmin(data: CreateUserInput): Promise<ActionResult> {
+  const hasAdmin = await adminExists();
+  if (hasAdmin) {
+    return { success: false, error: "Setup already completed. Sign in instead." };
+  }
+
+  if (data.role !== "admin") {
+    return { success: false, error: "First account must be an admin" };
+  }
+
+  const parsed = createUserSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  return createUserWithAdminClient(parsed.data);
+}
+
+async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionResult> {
+  const admin = createAdminClient();
+
+  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+    email: data.email.trim(),
+    password: data.password,
+    email_confirm: true,
+    user_metadata: { full_name: data.full_name.trim() },
+  });
+
+  if (authError) {
+    return { success: false, error: authError.message };
+  }
+
+  const { error: profileError } = await admin.from("profiles").insert({
+    id: authData.user.id,
+    full_name: data.full_name.trim(),
+    role: data.role,
+  });
+
+  if (profileError) {
+    await admin.auth.admin.deleteUser(authData.user.id);
+    return { success: false, error: profileError.message };
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/dashboard");
+  return { success: true };
+}
+
+export async function listUsers(): Promise<(Profile & { email?: string })[]> {
+  await requireUserWithRole(["admin"]);
+
+  const admin = createAdminClient();
+  const { data: profiles, error } = await admin
+    .from("profiles")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !profiles) return [];
+
+  const { data: authUsers } = await admin.auth.admin.listUsers();
+  const emailMap = new Map(
+    (authUsers?.users ?? []).map((u) => [u.id, u.email ?? ""])
+  );
+
+  return profiles.map((p) => ({
+    ...(p as Profile),
+    email: emailMap.get(p.id),
+  }));
+}
+
+export async function getUserRoleCounts() {
+  await requireUserWithRole(["admin"]);
+  const admin = createAdminClient();
+  const { data } = await admin.from("profiles").select("role");
+  const rows = data ?? [];
+  return {
+    admin: rows.filter((r) => r.role === "admin").length,
+    employee: rows.filter((r) => r.role === "employee").length,
+  };
+}

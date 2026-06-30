@@ -1,0 +1,58 @@
+import Link from "next/link";
+import { LogOut } from "lucide-react";
+import { signOut } from "@/lib/actions/auth";
+import type { Notification } from "@/lib/types/database";
+import { NotificationBell } from "@/components/shared/notification-bell";
+import { Button } from "@/components/ui/button";
+
+type AppHeaderProps = {
+  title: string;
+  subtitle: string;
+  actions?: React.ReactNode;
+  notifications?: Notification[];
+  leadLinkPrefix?: string;
+};
+
+export function AppHeader({
+  title,
+  subtitle,
+  actions,
+  notifications,
+  leadLinkPrefix,
+}: AppHeaderProps) {
+  const showNotifications = notifications && leadLinkPrefix;
+
+  return (
+    <header className="erp-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
+      <div className="page-container flex flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
+            AMAN ERP
+          </p>
+          <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+          <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+          {actions}
+          {showNotifications && (
+            <NotificationBell notifications={notifications} leadLinkPrefix={leadLinkPrefix} />
+          )}
+          <form action={signOut}>
+            <Button type="submit" variant="outline" className="h-11 px-3 sm:px-4">
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Log out</span>
+            </Button>
+          </form>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export function HeaderLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Button asChild variant="secondary" className="w-full sm:w-auto">
+      <Link href={href}>{children}</Link>
+    </Button>
+  );
+}

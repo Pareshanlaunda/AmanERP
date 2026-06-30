@@ -20,13 +20,21 @@ import { FormField, FormSection } from "@/components/onboarding/form-section";
 import { RadioFieldGroup } from "@/components/onboarding/radio-field-group";
 
 type OnboardingFormProps = {
+  leadId?: string;
   defaultAdvocateEmail?: string;
   defaultAdvocateName?: string;
+  defaultClientName?: string;
+  defaultClientEmail?: string;
+  defaultClientPhone?: string;
 };
 
 export function OnboardingForm({
+  leadId,
   defaultAdvocateEmail = "",
   defaultAdvocateName = "",
+  defaultClientName = "",
+  defaultClientEmail = "",
+  defaultClientPhone = "",
 }: OnboardingFormProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -40,6 +48,9 @@ export function OnboardingForm({
   } = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingFormSchema),
     defaultValues: {
+      client_name: defaultClientName,
+      client_email: defaultClientEmail,
+      client_contact_number: defaultClientPhone,
       advocate_email: defaultAdvocateEmail,
       advocate_name: defaultAdvocateName,
     },
@@ -58,7 +69,7 @@ export function OnboardingForm({
 
   function onSubmit(data: OnboardingFormValues) {
     startTransition(async () => {
-      const result = await submitOnboarding(data);
+      const result = await submitOnboarding(data, leadId ?? null);
       if (result && !result.success) {
         toast.error(result.error);
       }
@@ -217,9 +228,9 @@ export function OnboardingForm({
         </FormField>
       </FormSection>
 
-      <div className="flex justify-end gap-3 pb-8">
-        <Button type="submit" size="lg" disabled={isPending}>
-          {isPending ? "Submitting..." : "Submit"}
+      <div className="form-sticky-footer">
+        <Button type="submit" size="lg" disabled={isPending} className="w-full sm:w-auto">
+          {isPending ? "Submitting..." : "Submit onboarding"}
         </Button>
       </div>
     </form>

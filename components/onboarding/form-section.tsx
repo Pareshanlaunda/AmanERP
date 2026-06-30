@@ -9,12 +9,12 @@ type FormSectionProps = {
 
 export function FormSection({ title, description, children, className }: FormSectionProps) {
   return (
-    <section className={cn("rounded-lg border bg-card p-6 shadow-sm", className)}>
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold">{title}</h2>
+    <section className={cn("erp-panel overflow-hidden p-4 sm:p-6", className)}>
+      <div className="mb-4 sm:mb-6">
+        <h2 className="text-base font-semibold sm:text-lg">{title}</h2>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      <div className="grid gap-6 md:grid-cols-2">{children}</div>
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">{children}</div>
     </section>
   );
 }

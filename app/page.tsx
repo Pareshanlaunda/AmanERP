@@ -1,15 +1,14 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { adminExists } from "@/lib/actions/users";
+import { dashboardPathForRole, getUserWithRole } from "@/lib/auth/get-user";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const current = await getUserWithRole();
 
-  if (user) {
-    redirect("/dashboard");
+  if (current) {
+    redirect(dashboardPathForRole(current.role));
   }
 
-  redirect("/login");
+  const hasAdmin = await adminExists();
+  redirect(hasAdmin ? "/login" : "/setup");
 }

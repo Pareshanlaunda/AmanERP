@@ -4,14 +4,8 @@ import { useState, useTransition } from "react";
 import { signIn } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +25,16 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md shadow-md">
-      <CardHeader className="text-center">
-        <CardTitle>Employee Login</CardTitle>
-        <CardDescription>Sign in to access the client onboarding portal</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={handleSubmit} className="space-y-4">
+    <div className="erp-panel w-full max-w-md overflow-hidden p-0">
+      <div className="border-b border-border/70 bg-accent/40 px-6 py-8 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">AMAN ERP</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sign in</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Access leads, clients, and onboarding forms
+        </p>
+      </div>
+      <div className="px-6 py-6">
+        <form action={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -51,24 +48,23 @@ export function LoginForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               required
               autoComplete="current-password"
             />
           </div>
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
               {error}
-            </p>
+            </div>
           )}
           <Button type="submit" className="w-full" disabled={isPending}>
             {isPending ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

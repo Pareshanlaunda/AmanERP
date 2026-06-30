@@ -1,25 +1,29 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: oklch(0.985 0.002 247);
-  --color-foreground: oklch(0.21 0.034 265);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.21 0.034 265);
-  --color-primary: oklch(0.45 0.14 255);
-  --color-primary-foreground: oklch(0.985 0.002 247);
-  --color-secondary: oklch(0.96 0.006 247);
-  --color-secondary-foreground: oklch(0.21 0.034 265);
-  --color-muted: oklch(0.96 0.006 247);
-  --color-muted-foreground: oklch(0.5 0.03 257);
-  --color-accent: oklch(0.96 0.006 247);
-  --color-accent-foreground: oklch(0.21 0.034 265);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-border: oklch(0.9 0.01 247);
-  --color-input: oklch(0.9 0.01 247);
-  --color-ring: oklch(0.45 0.14 255);
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, monospace;
+
+  --color-background: #f4f6f9;
+  --color-foreground: #1a2332;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a2332;
+  --color-primary: #4a6fa5;
+  --color-primary-foreground: #f8fafc;
+  --color-secondary: #eef2f6;
+  --color-secondary-foreground: #243044;
+  --color-muted: #eef2f6;
+  --color-muted-foreground: #6b7785;
+  --color-accent: #e8eef5;
+  --color-accent-foreground: #243044;
+  --color-destructive: #b54a4a;
+  --color-border: #dde3ea;
+  --color-input: #dde3ea;
+  --color-ring: #4a6fa5;
   --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
 }
 
 * {
@@ -28,4 +32,116 @@
 
 body {
   @apply bg-background text-foreground antialiased;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.page-container {
+  @apply mx-auto w-full max-w-7xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-6 sm:px-6 sm:pt-8 lg:px-8;
+}
+
+.page-container-narrow {
+  @apply mx-auto w-full max-w-4xl px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-6 sm:px-6 sm:pt-8;
+}
+
+.page-container-form {
+  @apply mx-auto w-full max-w-4xl px-4 pb-[max(5rem,env(safe-area-inset-bottom))] pt-6 sm:px-6 sm:pb-8 sm:pt-8;
+}
+
+.table-desktop {
+  @apply hidden overflow-x-auto md:block;
+}
+
+.table-mobile {
+  @apply space-y-3 md:hidden;
+}
+
+.data-card {
+  @apply rounded-xl border bg-card p-4 text-sm shadow-sm;
+}
+
+.data-card-header {
+  @apply flex items-start justify-between gap-3;
+}
+
+.data-card-title {
+  @apply text-base font-semibold leading-snug;
+}
+
+.data-card-meta {
+  @apply mt-2 space-y-1 text-muted-foreground;
+}
+
+.data-card-actions {
+  @apply mt-4 flex flex-wrap gap-2;
+}
+
+.mobile-stat-grid {
+  @apply grid grid-cols-2 gap-2 sm:grid-cols-3;
+}
+
+.mobile-stat-item {
+  @apply rounded-lg border bg-muted/30 px-3 py-2 text-center;
+}
+
+.mobile-stat-label {
+  @apply text-[11px] font-medium uppercase tracking-wide text-muted-foreground;
+}
+
+.mobile-stat-value {
+  @apply mt-1 text-lg font-semibold tabular-nums;
+}
+
+.form-sticky-footer {
+  @apply sticky bottom-0 z-20 -mx-4 border-t border-border/80 bg-card/95 px-4 py-4 backdrop-blur-sm sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none;
+}
+
+.section-title {
+  @apply text-lg font-semibold tracking-tight text-foreground sm:text-xl;
+  font-family: var(--font-display);
+}
+
+.section-subtitle {
+  @apply mt-1 text-sm text-muted-foreground sm:text-base;
+}
+
+.erp-panel {
+  @apply rounded-xl border border-border/80 bg-card shadow-sm;
+  border-left: 4px solid var(--color-primary);
+}
+
+.erp-header {
+  @apply border-b border-border/80 bg-card/95 backdrop-blur-sm;
+}
+
+.cid-chip {
+  @apply inline-flex items-center rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 font-mono text-xs font-semibold tracking-wide text-primary sm:text-sm;
+}
+
+.stat-pill {
+  @apply inline-flex min-w-[2rem] items-center justify-center rounded-md bg-secondary px-2 py-0.5 text-sm font-semibold tabular-nums text-secondary-foreground;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
 }
