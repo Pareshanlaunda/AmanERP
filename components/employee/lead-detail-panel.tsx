@@ -1,116 +1,71 @@
 "use client";
 
-
-
-import { useRouter } from "next/navigation";
-
 import { useTransition } from "react";
-
 import { toast } from "sonner";
-
 import { markLeadInProgress, markLeadSuccessful } from "@/lib/actions/leads";
-
 import { RejectLeadForm } from "@/components/employee/reject-lead-form";
-
-import type { Lead, LeadUpdate } from "@/lib/types/database";
-
+import type { Lead, LeadComment, LeadUpdate } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { LeadInfoFields } from "@/components/shared/lead-info-fields";
-
 import { StatusBadge } from "@/components/shared/status-badge";
-
 import { CidBadge } from "@/components/shared/cid-badge";
-
 import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
-
-import type { LeadComment } from "@/lib/types/database";
-
+import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
+import { useRealtimeLead } from "@/lib/hooks/use-realtime-lead";
+import { useRealtimeRecord } from "@/lib/hooks/use-realtime-record";
+import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { Button } from "@/components/ui/button";
-
 import Link from "next/link";
 
-
-
 type LeadDetailPanelProps = {
-
+  currentUserId: string;
   lead: Lead;
-
   updates: LeadUpdate[];
-
   comments: LeadComment[];
-
   hasUnreadComments: boolean;
-
   authorNames: Record<string, string>;
-
   clientId?: string | null;
-
 };
 
 
 
 export function LeadDetailPanel({
-
-  lead,
-
+  currentUserId,
+  lead: initialLead,
   updates,
-
   comments,
-
   hasUnreadComments,
-
   authorNames,
-
   clientId,
-
 }: LeadDetailPanelProps) {
-
-  const router = useRouter();
-
+  const lead = useRealtimeLead(initialLead);
+  const initialOnboardingRecord =
+    initialLead.onboarding_record_id && clientId
+      ? ({ id: initialLead.onboarding_record_id, client_id: clientId } as ClientOnboarding)
+      : null;
+  const liveOnboarding = useRealtimeRecord({
+    table: "client_onboardings",
+    recordId: lead.onboarding_record_id,
+    initialRecord: initialOnboardingRecord,
+    channelName: `employee-lead-onboarding:${lead.id}`,
+  });
+  const liveClientId = liveOnboarding?.client_id ?? clientId;
   const [isPending, startTransition] = useTransition();
 
-
-
   function handleStartProgress() {
-
     startTransition(async () => {
-
       const result = await markLeadInProgress(lead.id);
-
       if (!result.success) toast.error(result.error);
-
-      else {
-
-        toast.success("Lead is now in progress");
-
-        router.refresh();
-
-      }
-
+      else toast.success("Lead is now in progress");
     });
-
   }
 
-
-
   function handleMarkSuccessful() {
-
     startTransition(async () => {
-
       const result = await markLeadSuccessful(lead.id);
-
       if (!result.success) toast.error(result.error);
-
-      else {
-
-        toast.success("Lead marked successful — admin has been notified");
-
-        router.refresh();
-
-      }
-
+      else toast.success("Lead marked successful — admin has been notified");
     });
-
   }
 
 
@@ -131,13 +86,13 @@ export function LeadDetailPanel({
 
         <div className="space-y-2 p-4 text-sm sm:p-6">
 
-          {clientId && (
+          {liveClientId && (
 
             <div className="flex flex-wrap items-center gap-2">
 
               <span className="font-medium">Client ID</span>
 
-              <CidBadge clientId={clientId} />
+              <CidBadge clientId={liveClientId} />
 
             </div>
 
@@ -174,15 +129,11 @@ export function LeadDetailPanel({
 
 
       <LeadCommentsPanel
-
         leadId={lead.id}
-
+        currentUserId={currentUserId}
         comments={comments}
-
         hasUnread={hasUnreadComments}
-
         authorNames={authorNames}
-
       />
 
 
@@ -255,49 +206,8 @@ export function LeadDetailPanel({
 
 
 
-      <section className="erp-panel overflow-hidden">
-
-        <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
-
-          <h2 className="section-title">Activity timeline</h2>
-
-        </div>
-
-        <div className="space-y-3 p-4 sm:p-6">
-
-          {updates.length === 0 ? (
-
-            <p className="text-sm text-muted-foreground">No updates yet.</p>
-
-          ) : (
-
-            updates.map((update) => (
-
-              <div key={update.id} className="rounded-md border p-3 text-sm">
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-
-                  <span className="text-muted-foreground">{formatDate(update.created_at)}</span>
-
-                  {update.status && <StatusBadge status={update.status} />}
-
-                </div>
-
-                <p className="mt-2">{update.note}</p>
-
-              </div>
-
-            ))
-
-          )}
-
-        </div>
-
-      </section>
-
+      <LeadTimelinePanel leadId={lead.id} initialUpdates={updates} />
     </div>
-
   );
-
 }
 

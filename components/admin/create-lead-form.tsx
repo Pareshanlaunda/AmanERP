@@ -53,7 +53,6 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
 
       toast.success(assignedTo ? "Lead created and assigned" : "Lead created");
       router.push("/admin/dashboard");
-      router.refresh();
     });
   }
 

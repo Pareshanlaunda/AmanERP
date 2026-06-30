@@ -9,12 +9,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadUpdate } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
-import { AssignLeadForm } from "@/components/admin/assign-lead-form";
-import { ClientOnboardingDetails } from "@/components/shared/client-onboarding-details";
+import { LiveAssignLeadSection } from "@/components/admin/live-assign-lead-section";
+import { LiveLeadOnboardingSection } from "@/components/shared/live-lead-onboarding-section";
 import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
 import { LeadInfoFields } from "@/components/shared/lead-info-fields";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { formatDate } from "@/lib/format";
+import { LiveLeadStatus } from "@/components/shared/live-lead-status";
+import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
 import { Button } from "@/components/ui/button";
 
 async function getAuthorNames(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -43,7 +43,7 @@ export default async function AdminLeadDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUserWithRole(["admin"]);
+  const current = await requireUserWithRole(["admin"]);
   const { id } = await params;
   const supabase = await createClient();
 
@@ -72,6 +72,7 @@ export default async function AdminLeadDetailPage({
       <AppHeader
         title={typedLead.client_name}
         subtitle="Lead details and assignment"
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"
       />
@@ -86,7 +87,7 @@ export default async function AdminLeadDetailPage({
         <section className="erp-panel overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-border/70 bg-accent/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <h2 className="section-title">Lead info</h2>
-            <StatusBadge status={typedLead.status} />
+            <LiveLeadStatus lead={typedLead} variant="badge" />
           </div>
           <div className="space-y-2 p-4 text-sm sm:p-6">
             <LeadInfoFields lead={typedLead} />
@@ -95,77 +96,23 @@ export default async function AdminLeadDetailPage({
                 <span className="font-medium">Notes:</span> {typedLead.notes}
               </p>
             )}
-            {typedLead.status === "converted" && (
-              <p className="font-medium text-green-700">This lead has been converted to a client.</p>
-            )}
-            {typedLead.status === "lost" && typedLead.lost_reason && (
-              <div className="rounded-md bg-destructive/5 p-3 text-destructive">
-                <p className="font-medium">Lost / not converted</p>
-                <p className="mt-1">{typedLead.lost_reason}</p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Closed: {formatDate(typedLead.lost_at)}
-                </p>
-              </div>
-            )}
+            <LiveLeadStatus lead={typedLead} variant="alerts" />
           </div>
         </section>
 
-        {onboarding ? (
-          <section className="space-y-4">
-            <div>
-              <h2 className="section-title">Client onboarding form</h2>
-              <p className="section-subtitle">
-                Full details submitted by the employee during onboarding.
-              </p>
-            </div>
-            <ClientOnboardingDetails client={onboarding} />
-          </section>
-        ) : (
-          <section className="erp-panel overflow-hidden">
-            <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
-              <h2 className="section-title">Client onboarding form</h2>
-            </div>
-            <p className="p-4 text-sm text-muted-foreground sm:p-6">
-              No onboarding form submitted yet for this lead.
-            </p>
-          </section>
-        )}
+        <LiveLeadOnboardingSection lead={typedLead} initialOnboarding={onboarding} />
 
         <LeadCommentsPanel
           leadId={typedLead.id}
+          currentUserId={current.id}
           comments={comments}
           hasUnread={unread}
           authorNames={authorNames}
         />
 
-        {typedLead.status !== "converted" && typedLead.status !== "lost" && (
-          <AssignLeadForm
-            leadId={typedLead.id}
-            employees={employees}
-            currentAssignee={typedLead.assigned_to}
-          />
-        )}
+        <LiveAssignLeadSection lead={typedLead} employees={employees} />
 
-        <section className="erp-panel overflow-hidden">
-          <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
-            <h2 className="section-title">Progress timeline</h2>
-          </div>
-          <div className="space-y-3 p-4 sm:p-6">
-            {(updates ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No updates yet.</p>
-            ) : (
-              (updates as LeadUpdate[]).map((update) => (
-                <div key={update.id} className="rounded-md border p-3 text-sm">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-muted-foreground">{formatDate(update.created_at)}</span>
-                    {update.status && <StatusBadge status={update.status} />}
-                  </div>
-                  <p className="mt-2">{update.note}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
+        <LeadTimelinePanel leadId={typedLead.id} initialUpdates={(updates ?? []) as LeadUpdate[]} />
       </main>
     </div>
   );

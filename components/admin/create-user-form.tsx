@@ -54,7 +54,6 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
       } else {
         form.reset();
         setRole(defaultRole);
-        router.refresh();
       }
     });
   }

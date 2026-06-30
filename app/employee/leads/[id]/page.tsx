@@ -59,6 +59,7 @@ export default async function EmployeeLeadDetailPage({
       <AppHeader
         title={(lead as Lead).client_name}
         subtitle="Lead progress and onboarding"
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/employee/leads"
       />
@@ -70,6 +71,7 @@ export default async function EmployeeLeadDetailPage({
           </Link>
         </Button>
         <LeadDetailPanel
+          currentUserId={current.id}
           lead={lead as Lead}
           updates={(updates ?? []) as LeadUpdate[]}
           comments={comments}

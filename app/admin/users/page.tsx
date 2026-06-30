@@ -11,7 +11,7 @@ import { AppHeader } from "@/components/shared/app-header";
 
 import { CreateUserForm } from "@/components/admin/create-user-form";
 
-import { UsersTable } from "@/components/admin/users-table";
+import { RealtimeUsersTable } from "@/components/admin/realtime-users-table";
 
 import { Button } from "@/components/ui/button";
 
@@ -36,7 +36,7 @@ export default async function AdminUsersPage() {
         title="Manage users"
 
         subtitle={current.email}
-
+        userId={current.id}
         notifications={notifications}
 
         leadLinkPrefix="/admin/leads"
@@ -75,7 +75,7 @@ export default async function AdminUsersPage() {
 
           <div className="p-4 sm:p-6">
 
-            <UsersTable users={users} />
+            <RealtimeUsersTable initialUsers={users} />
 
           </div>
 

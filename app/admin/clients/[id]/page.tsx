@@ -6,7 +6,7 @@ import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
-import { ClientOnboardingDetails } from "@/components/shared/client-onboarding-details";
+import { LiveClientOnboardingDetails } from "@/components/shared/live-client-onboarding-details";
 import { Button } from "@/components/ui/button";
 
 export default async function AdminClientDetailPage({
@@ -14,7 +14,7 @@ export default async function AdminClientDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUserWithRole(["admin"]);
+  const current = await requireUserWithRole(["admin"]);
   const { id } = await params;
   const supabase = await createClient();
   const notifications = await getNotifications();
@@ -37,6 +37,7 @@ export default async function AdminClientDetailPage({
       <AppHeader
         title={typedClient.client_name}
         subtitle="Client onboarding record"
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"
       />
@@ -47,7 +48,7 @@ export default async function AdminClientDetailPage({
             {typedClient.lead_id ? "Back to lead" : "Back to dashboard"}
           </Link>
         </Button>
-        <ClientOnboardingDetails client={typedClient} />
+        <LiveClientOnboardingDetails clientId={typedClient.id} initialClient={typedClient} />
       </main>
     </div>
   );

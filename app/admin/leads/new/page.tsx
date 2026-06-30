@@ -8,7 +8,7 @@ import { CreateLeadForm } from "@/components/admin/create-lead-form";
 import { Button } from "@/components/ui/button";
 
 export default async function NewLeadPage() {
-  await requireUserWithRole(["admin"]);
+  const current = await requireUserWithRole(["admin"]);
   const [notifications, employees] = await Promise.all([
     getNotifications(),
     getEmployeeProfilesForAdmin(),
@@ -19,6 +19,7 @@ export default async function NewLeadPage() {
       <AppHeader
         title="Create Lead"
         subtitle="Manual test lead (WhatsApp-ready later)"
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"
       />

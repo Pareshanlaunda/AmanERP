@@ -6,14 +6,13 @@ import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, Profile } from "@/lib/types/database";
 import { AppHeader, HeaderLink } from "@/components/shared/app-header";
-import { LeadsTable } from "@/components/admin/leads-table";
-import { EmployeesOverview } from "@/components/admin/employees-overview";
+import { RealtimeLeadsTable } from "@/components/admin/realtime-leads-table";
+import { RealtimeEmployeesOverview } from "@/components/admin/realtime-employees-overview";
 import { SuccessToast } from "@/components/dashboard/success-toast";
 
 export default async function AdminDashboardPage() {
-  await requireUserWithRole(["admin"]);
-  const supabase = await createClient();
   const current = await requireUserWithRole(["admin"]);
+  const supabase = await createClient();
   const [notifications, employeeStats] = await Promise.all([
     getNotifications(),
     getEmployeesOverview(),
@@ -37,6 +36,7 @@ export default async function AdminDashboardPage() {
       <AppHeader
         title="Admin Dashboard"
         subtitle={current.email}
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"
       />
@@ -54,14 +54,14 @@ export default async function AdminDashboardPage() {
             </HeaderLink>
           </div>
           <div className="p-4 sm:p-6">
-            <LeadsTable
-              leads={(leads ?? []) as Lead[]}
+            <RealtimeLeadsTable
+              initialLeads={(leads ?? []) as Lead[]}
               employees={employees as Profile[]}
             />
           </div>
         </section>
 
-        <EmployeesOverview employees={employeeStats} />
+        <RealtimeEmployeesOverview initialEmployees={employeeStats} />
       </main>
     </div>
   );

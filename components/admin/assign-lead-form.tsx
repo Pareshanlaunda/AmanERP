@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { assignLead } from "@/lib/actions/leads";
 import type { Profile } from "@/lib/types/database";
@@ -23,10 +22,13 @@ type AssignLeadFormProps = {
 };
 
 export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLeadFormProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [assignedTo, setAssignedTo] = useState(currentAssignee ?? "");
   const [comment, setComment] = useState("");
+
+  useEffect(() => {
+    setAssignedTo(currentAssignee ?? "");
+  }, [currentAssignee]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +50,6 @@ export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLea
       }
 
       toast.success("Lead assigned to employee");
-      router.refresh();
     });
   }
 

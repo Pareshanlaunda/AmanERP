@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 type AppHeaderProps = {
   title: string;
   subtitle: string;
+  userId?: string;
   actions?: React.ReactNode;
   notifications?: Notification[];
   leadLinkPrefix?: string;
@@ -16,11 +17,12 @@ type AppHeaderProps = {
 export function AppHeader({
   title,
   subtitle,
+  userId,
   actions,
   notifications,
   leadLinkPrefix,
 }: AppHeaderProps) {
-  const showNotifications = notifications && leadLinkPrefix;
+  const showNotifications = userId && notifications && leadLinkPrefix;
 
   return (
     <header className="erp-header sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
@@ -35,7 +37,11 @@ export function AppHeader({
         <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
           {actions}
           {showNotifications && (
-            <NotificationBell notifications={notifications} leadLinkPrefix={leadLinkPrefix} />
+            <NotificationBell
+              userId={userId}
+              initialNotifications={notifications}
+              leadLinkPrefix={leadLinkPrefix}
+            />
           )}
           <form action={signOut}>
             <Button type="submit" variant="outline" className="h-11 px-3 sm:px-4">

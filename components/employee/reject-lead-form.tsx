@@ -60,8 +60,6 @@ export function RejectLeadForm({ leadId, clientName }: RejectLeadFormProps) {
 
       router.push("/employee/dashboard");
 
-      router.refresh();
-
     });
 
   }

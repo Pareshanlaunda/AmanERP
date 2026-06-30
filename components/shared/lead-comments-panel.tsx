@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { addLeadComment, markCommentsRead } from "@/lib/actions/comments";
+import { useRealtimeRows } from "@/lib/hooks/use-realtime-rows";
 import type { LeadComment } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type LeadCommentsPanelProps = {
   leadId: string;
+  currentUserId: string;
   comments: LeadComment[];
   hasUnread: boolean;
   authorNames?: Record<string, string>;
@@ -20,27 +21,52 @@ type LeadCommentsPanelProps = {
 
 export function LeadCommentsPanel({
   leadId,
-  comments,
-  hasUnread,
+  currentUserId,
+  comments: initialComments,
+  hasUnread: initialHasUnread,
   authorNames = {},
 }: LeadCommentsPanelProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(true);
+  const [hasUnread, setHasUnread] = useState(initialHasUnread);
+
+  useEffect(() => {
+    setHasUnread(initialHasUnread);
+  }, [initialHasUnread]);
+
+  const handleCommentRow = useCallback(
+    (comment: LeadComment, event: "INSERT" | "UPDATE" | "DELETE") => {
+      if (event === "INSERT" && comment.author_id !== currentUserId) {
+        setHasUnread(true);
+      }
+    },
+    [currentUserId]
+  );
+
+  const liveComments = useRealtimeRows({
+    table: "lead_comments",
+    initialRows: initialComments,
+    channelName: `lead-comments:${leadId}`,
+    filter: `lead_id=eq.${leadId}`,
+    sortBy: "created_at",
+    sortDescending: false,
+    onRow: handleCommentRow,
+  });
 
   function handleOpen() {
     if (!open) setOpen(true);
     if (hasUnread) {
+      setHasUnread(false);
       startTransition(async () => {
         await markCommentsRead(leadId);
-        router.refresh();
       });
     }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const message = new FormData(e.currentTarget).get("message") as string;
+    const form = e.currentTarget;
+    const message = new FormData(form).get("message") as string;
 
     startTransition(async () => {
       const result = await addLeadComment(leadId, message);
@@ -49,8 +75,7 @@ export function LeadCommentsPanel({
         return;
       }
       toast.success("Comment added");
-      e.currentTarget.reset();
-      router.refresh();
+      form.reset();
     });
   }
 
@@ -74,10 +99,10 @@ export function LeadCommentsPanel({
       {open && (
         <div className="space-y-4 p-4 sm:p-6">
           <div className="max-h-64 space-y-3 overflow-y-auto">
-            {comments.length === 0 ? (
+            {liveComments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No comments yet. Start the discussion.</p>
             ) : (
-              comments.map((comment) => (
+              liveComments.map((comment) => (
                 <div key={comment.id} className="rounded-md border bg-muted/30 p-3 text-sm">
                   <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{authorNames[comment.author_id] ?? "User"}</span>

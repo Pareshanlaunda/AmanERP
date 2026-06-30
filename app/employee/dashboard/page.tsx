@@ -32,6 +32,7 @@ export default async function EmployeeDashboardPage() {
       <AppHeader
         title="Employee Dashboard"
         subtitle={current.email}
+        userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/employee/leads"
       />
@@ -41,6 +42,7 @@ export default async function EmployeeDashboardPage() {
         </Suspense>
 
         <EmployeeDashboardContent
+          userId={current.id}
           leads={(leads ?? []) as Lead[]}
           clients={(clients ?? []) as ClientOnboarding[]}
         />
