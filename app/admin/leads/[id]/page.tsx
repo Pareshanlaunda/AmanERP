@@ -9,18 +9,9 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadUpdate } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
-import { LiveAssignLeadSection } from "@/components/admin/live-assign-lead-section";
-import { LiveLeadOnboardingSection } from "@/components/shared/live-lead-onboarding-section";
-import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
-import { LeadInfoFields } from "@/components/shared/lead-info-fields";
-import { LiveLeadStatus } from "@/components/shared/live-lead-status";
-import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
+import { AdminLeadDetailLive } from "@/components/admin/admin-lead-detail-live";
 import { Button } from "@/components/ui/button";
-
-async function getAuthorNames(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase.from("profiles").select("id, full_name");
-  return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name ?? "User"]));
-}
+import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
 
 async function getLeadOnboarding(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -63,7 +54,7 @@ export default async function AdminLeadDetailPage({
       getNotifications(),
       getLeadComments(id),
       hasUnreadComments(id),
-      getAuthorNames(supabase),
+      getAuthorNamesFromComments(id, supabase),
       getLeadOnboarding(supabase, typedLead),
     ]);
 
@@ -84,35 +75,16 @@ export default async function AdminLeadDetailPage({
           </Link>
         </Button>
 
-        <section className="erp-panel overflow-hidden">
-          <div className="flex flex-col gap-3 border-b border-border/70 bg-accent/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <h2 className="section-title">Lead info</h2>
-            <LiveLeadStatus lead={typedLead} variant="badge" />
-          </div>
-          <div className="space-y-2 p-4 text-sm sm:p-6">
-            <LeadInfoFields lead={typedLead} />
-            {typedLead.notes && (
-              <p>
-                <span className="font-medium">Notes:</span> {typedLead.notes}
-              </p>
-            )}
-            <LiveLeadStatus lead={typedLead} variant="alerts" />
-          </div>
-        </section>
-
-        <LiveLeadOnboardingSection lead={typedLead} initialOnboarding={onboarding} />
-
-        <LeadCommentsPanel
-          leadId={typedLead.id}
+        <AdminLeadDetailLive
+          lead={typedLead}
+          employees={employees}
           currentUserId={current.id}
           comments={comments}
           hasUnread={unread}
           authorNames={authorNames}
+          onboarding={onboarding}
+          updates={(updates ?? []) as LeadUpdate[]}
         />
-
-        <LiveAssignLeadSection lead={typedLead} employees={employees} />
-
-        <LeadTimelinePanel leadId={typedLead.id} initialUpdates={(updates ?? []) as LeadUpdate[]} />
       </main>
     </div>
   );

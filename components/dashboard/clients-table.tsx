@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { CidBadge } from "@/components/shared/cid-badge";
+import { ClidBadge } from "@/components/shared/clid-badge";
 import { SearchBar } from "@/components/dashboard/search-bar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +14,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useMemo, useState } from "react";
+import { filterClients } from "@/lib/filters/list-search";
 
 type ClientsTableProps = {
   clients: ClientOnboarding[];
   showClientId?: boolean;
   showSearch?: boolean;
   viewLinkPrefix?: string;
+  emptyMessage?: string;
 };
 
 export function ClientsTable({
@@ -28,36 +30,32 @@ export function ClientsTable({
   showClientId = false,
   showSearch = false,
   viewLinkPrefix,
+  emptyMessage,
 }: ClientsTableProps) {
   const [query, setQuery] = useState("");
-
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter(
-      (c) =>
-        c.client_name.toLowerCase().includes(q) ||
-        (c.client_id?.toLowerCase().includes(q) ?? false) ||
-        (c.client_email?.toLowerCase().includes(q) ?? false) ||
-        (c.client_contact_number?.toLowerCase().includes(q) ?? false)
-    );
-  }, [clients, query]);
+    if (!showSearch) return clients;
+    return filterClients(clients, query);
+  }, [clients, query, showSearch]);
+
+  const list = showSearch ? filtered : clients;
 
   return (
     <div className="space-y-4">
-      {showSearch && (
+      {showSearch ? (
         <SearchBar
           value={query}
           onChange={setQuery}
-          placeholder="Search by client name or CID..."
+          placeholder="Search by client name or CLID..."
         />
-      )}
+      ) : null}
 
-      {filtered.length === 0 ? (
+      {list.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-          {clients.length === 0
-            ? "No clients onboarded yet."
-            : "No clients match your search."}
+          {emptyMessage ??
+            (clients.length === 0
+              ? "No clients onboarded yet."
+              : "No clients match your search.")}
         </div>
       ) : (
         <>
@@ -65,37 +63,37 @@ export function ClientsTable({
             <Table>
               <TableHeader>
                 <TableRow>
-                  {showClientId && <TableHead>Client ID</TableHead>}
+                  {showClientId ? <TableHead>CLID</TableHead> : null}
                   <TableHead>Client Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Loan Amount</TableHead>
                   <TableHead>Advocate</TableHead>
                   <TableHead>Submitted</TableHead>
-                  {viewLinkPrefix && <TableHead></TableHead>}
+                  {viewLinkPrefix ? <TableHead></TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((client) => (
+                {list.map((client) => (
                   <TableRow key={client.id}>
-                    {showClientId && (
+                    {showClientId ? (
                       <TableCell>
-                        <CidBadge clientId={client.client_id} />
+                        <ClidBadge clientId={client.client_id} />
                       </TableCell>
-                    )}
+                    ) : null}
                     <TableCell className="font-medium">{client.client_name}</TableCell>
                     <TableCell>{client.client_email ?? "—"}</TableCell>
                     <TableCell>{client.client_contact_number ?? "—"}</TableCell>
                     <TableCell>{formatCurrency(client.loan_amount)}</TableCell>
                     <TableCell>{client.advocate_name}</TableCell>
                     <TableCell>{formatDate(client.created_at)}</TableCell>
-                    {viewLinkPrefix && (
+                    {viewLinkPrefix ? (
                       <TableCell>
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`${viewLinkPrefix}/${client.id}`}>View</Link>
                         </Button>
                       </TableCell>
-                    )}
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -103,9 +101,9 @@ export function ClientsTable({
           </div>
 
           <div className="table-mobile">
-            {filtered.map((client) => (
+            {list.map((client) => (
               <div key={client.id} className="data-card">
-                {showClientId && <CidBadge clientId={client.client_id} className="mb-2" />}
+                {showClientId ? <ClidBadge clientId={client.client_id} className="mb-2" /> : null}
                 <div className="data-card-title">{client.client_name}</div>
                 <div className="data-card-meta">
                   <p>{client.client_email ?? "No email"}</p>
@@ -114,13 +112,13 @@ export function ClientsTable({
                   <p>Advocate: {client.advocate_name}</p>
                   <p>Submitted: {formatDate(client.created_at)}</p>
                 </div>
-                {viewLinkPrefix && (
+                {viewLinkPrefix ? (
                   <div className="data-card-actions">
                     <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
                       <Link href={`${viewLinkPrefix}/${client.id}`}>View full record</Link>
                     </Button>
                   </div>
-                )}
+                ) : null}
               </div>
             ))}
           </div>

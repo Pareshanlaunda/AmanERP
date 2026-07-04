@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { listUsers } from "@/lib/actions/users";
 import type { Profile } from "@/lib/types/database";
 import { useRealtimeInvalidation } from "@/lib/hooks/use-realtime-record";
@@ -12,10 +12,6 @@ type RealtimeUsersTableProps = {
 
 export function RealtimeUsersTable({ initialUsers }: RealtimeUsersTableProps) {
   const [users, setUsers] = useState(initialUsers);
-
-  useEffect(() => {
-    setUsers(initialUsers);
-  }, [initialUsers]);
 
   const refresh = useCallback(() => {
     void listUsers().then(setUsers);

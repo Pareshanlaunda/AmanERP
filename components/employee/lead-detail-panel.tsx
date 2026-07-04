@@ -8,10 +8,10 @@ import type { Lead, LeadComment, LeadUpdate } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { LeadInfoFields } from "@/components/shared/lead-info-fields";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { CidBadge } from "@/components/shared/cid-badge";
+import { ClidBadge } from "@/components/shared/clid-badge";
 import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
 import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
-import { useRealtimeLead } from "@/lib/hooks/use-realtime-lead";
+import { useLeadLive } from "@/components/shared/lead-live-provider";
 import { useRealtimeRecord } from "@/lib/hooks/use-realtime-record";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { Button } from "@/components/ui/button";
@@ -29,20 +29,19 @@ type LeadDetailPanelProps = {
 
 export function LeadDetailPanel({
   currentUserId,
-  lead: initialLead,
   updates,
   comments,
   hasUnreadComments,
   authorNames,
   clientId,
-}: LeadDetailPanelProps) {
-  const lead = useRealtimeLead(initialLead);
+}: Omit<LeadDetailPanelProps, "lead">) {
+  const { lead, setLeadOptimistic } = useLeadLive();
   const initialOnboardingRecord = useMemo(
     () =>
-      initialLead.onboarding_record_id && clientId
-        ? ({ id: initialLead.onboarding_record_id, client_id: clientId } as ClientOnboarding)
+      lead.onboarding_record_id && clientId
+        ? ({ id: lead.onboarding_record_id, client_id: clientId } as ClientOnboarding)
         : null,
-    [initialLead.onboarding_record_id, clientId]
+    [lead.onboarding_record_id, clientId]
   );
   const liveOnboarding = useRealtimeRecord({
     table: "client_onboardings",
@@ -55,9 +54,14 @@ export function LeadDetailPanel({
 
   function handleStartProgress() {
     startTransition(async () => {
+      setLeadOptimistic({ status: "in_progress" });
       const result = await markLeadInProgress(lead.id);
-      if (!result.success) toast.error(result.error);
-      else toast.success("Lead is now in progress");
+      if (!result.success) {
+        setLeadOptimistic({ status: "assigned" });
+        toast.error(result.error);
+      } else {
+        toast.success("Lead is now in progress");
+      }
     });
   }
 
@@ -71,8 +75,8 @@ export function LeadDetailPanel({
         <div className="space-y-2 p-4 text-sm sm:p-6">
           {liveClientId && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">Client ID</span>
-              <CidBadge clientId={liveClientId} />
+              <span className="font-medium">CLID</span>
+              <ClidBadge clientId={liveClientId} />
             </div>
           )}
           <LeadInfoFields lead={lead} />

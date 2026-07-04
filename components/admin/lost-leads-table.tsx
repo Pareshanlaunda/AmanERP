@@ -10,11 +10,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export function LostLeadsTable({ leads }: { leads: Lead[] }) {
+export function LostLeadsTable({
+  leads,
+  emptyMessage,
+}: {
+  leads: Lead[];
+  emptyMessage?: string;
+}) {
   if (leads.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-        No lost or rejected leads for this employee.
+        {emptyMessage ?? "No lost or rejected leads for this employee."}
       </div>
     );
   }

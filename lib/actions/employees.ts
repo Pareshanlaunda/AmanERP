@@ -3,75 +3,164 @@
 import { notFound } from "next/navigation";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { listAllAuthUsers } from "@/lib/queries/auth-users";
+import { getEmployeeProfilesFromDb } from "@/lib/queries/profiles";
 import type { EmployeeStats, Lead, Profile } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 
-function countByStatus(leads: { status: string }[], status: string) {
-  return leads.filter((l) => l.status === status).length;
+const EMPLOYEE_DETAIL_LIST_LIMIT = 100;
+
+type LeadStatusRow = { assigned_to: string | null; status: string };
+type ClientCountRow = { submitted_by: string | null };
+
+function buildLeadStatsByEmployee(rows: LeadStatusRow[]) {
+  const map = new Map<
+    string,
+    { assigned: number; in_progress: number; converted: number; total: number }
+  >();
+
+  for (const row of rows) {
+    if (!row.assigned_to) continue;
+    const entry = map.get(row.assigned_to) ?? {
+      assigned: 0,
+      in_progress: 0,
+      converted: 0,
+      total: 0,
+    };
+    entry.total += 1;
+    if (row.status === "assigned") entry.assigned += 1;
+    if (row.status === "in_progress") entry.in_progress += 1;
+    if (row.status === "converted") entry.converted += 1;
+    map.set(row.assigned_to, entry);
+  }
+
+  return map;
 }
 
-export async function getEmployeesOverview(): Promise<EmployeeStats[]> {
+function buildClientCountsByEmployee(rows: ClientCountRow[]) {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.submitted_by) continue;
+    map.set(row.submitted_by, (map.get(row.submitted_by) ?? 0) + 1);
+  }
+  return map;
+}
+
+async function fetchAggregatedEmployeeStats(admin: ReturnType<typeof createAdminClient>) {
+  const [{ data: leadRows }, { data: clientRows }] = await Promise.all([
+    admin.from("leads").select("assigned_to, status"),
+    admin.from("client_onboardings").select("submitted_by"),
+  ]);
+
+  return {
+    leadStats: buildLeadStatsByEmployee((leadRows ?? []) as LeadStatusRow[]),
+    clientCounts: buildClientCountsByEmployee((clientRows ?? []) as ClientCountRow[]),
+  };
+}
+
+async function buildEmployeeStatsList(): Promise<EmployeeStats[]> {
   await requireUserWithRole(["admin"]);
   const admin = createAdminClient();
 
-  const { data: profiles } = await admin.from("profiles").select("*");
-  const profileById = new Map((profiles ?? []).map((p) => [p.id, p as Profile]));
+  const [employeeProfiles, authUsers, { leadStats, clientCounts }] = await Promise.all([
+    getEmployeeProfilesFromDb(),
+    listAllAuthUsers(),
+    fetchAggregatedEmployeeStats(admin),
+  ]);
 
-  const { data: authData } = await admin.auth.admin.listUsers();
-  const authUsers = authData?.users ?? [];
+  const emailById = new Map(authUsers.map((u) => [u.id, u.email ?? undefined]));
+  const authMetaById = new Map(authUsers.map((u) => [u.id, u]));
 
-  const stats: EmployeeStats[] = [];
+  const stats: EmployeeStats[] = employeeProfiles.map((profile) => {
+    const authUser = authMetaById.get(profile.id);
+    const counts = leadStats.get(profile.id);
 
-  for (const user of authUsers) {
-    const profile = profileById.get(user.id);
-    if (profile?.role === "admin") continue;
-    if (profile && profile.role !== "employee") continue;
-
-    const { data: leads } = await admin
-      .from("leads")
-      .select("status")
-      .eq("assigned_to", user.id);
-
-    const { count: clientCount } = await admin
-      .from("client_onboardings")
-      .select("*", { count: "exact", head: true })
-      .eq("submitted_by", user.id);
-
-    const rows = leads ?? [];
-
-    stats.push({
-      id: user.id,
+    return {
+      id: profile.id,
       full_name:
-        profile?.full_name ??
-        user.user_metadata?.full_name ??
-        user.email?.split("@")[0] ??
+        profile.full_name ??
+        authUser?.user_metadata?.full_name ??
+        authUser?.email?.split("@")[0] ??
         "Employee",
       role: "employee",
-      employee_type: profile?.employee_type ?? "general",
-      created_at: profile?.created_at ?? user.created_at,
-      email: user.email ?? undefined,
-      assigned_count: countByStatus(rows, "assigned"),
-      in_progress_count: countByStatus(rows, "in_progress"),
-      converted_count: countByStatus(rows, "converted"),
-      total_leads: rows.length,
-      total_clients: clientCount ?? 0,
-    });
-  }
+      employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+      created_at: profile.created_at ?? authUser?.created_at ?? new Date().toISOString(),
+      email: emailById.get(profile.id),
+      assigned_count: counts?.assigned ?? 0,
+      in_progress_count: counts?.in_progress ?? 0,
+      converted_count: counts?.converted ?? 0,
+      total_leads: counts?.total ?? 0,
+      total_clients: clientCounts.get(profile.id) ?? 0,
+    };
+  });
 
   return stats.sort((a, b) =>
     (a.full_name ?? "").localeCompare(b.full_name ?? "", undefined, { sensitivity: "base" })
   );
 }
 
+async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats | null> {
+  const admin = createAdminClient();
+
+  const [{ data: profile }, authUsers, { leadStats, clientCounts }] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("id, full_name, role, employee_type, created_at")
+      .eq("id", employeeId)
+      .maybeSingle(),
+    listAllAuthUsers(),
+    fetchAggregatedEmployeeStats(admin),
+  ]);
+
+  if (!profile || profile.role !== "employee") return null;
+
+  const authUser = authUsers.find((u) => u.id === employeeId);
+  const counts = leadStats.get(employeeId);
+
+  return {
+    id: profile.id,
+    full_name:
+      profile.full_name ??
+      authUser?.user_metadata?.full_name ??
+      authUser?.email?.split("@")[0] ??
+      "Employee",
+    role: "employee",
+    employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+    created_at: profile.created_at ?? authUser?.created_at ?? new Date().toISOString(),
+    email: authUser?.email ?? undefined,
+    assigned_count: counts?.assigned ?? 0,
+    in_progress_count: counts?.in_progress ?? 0,
+    converted_count: counts?.converted ?? 0,
+    total_leads: counts?.total ?? 0,
+    total_clients: clientCounts.get(employeeId) ?? 0,
+  };
+}
+
+export async function getEmployeesOverview(): Promise<EmployeeStats[]> {
+  return buildEmployeeStatsList();
+}
+
 export async function getEmployeeProfilesForAdmin(): Promise<(Profile & { email?: string })[]> {
-  const overview = await getEmployeesOverview();
-  return overview.map(({ id, full_name, role, employee_type, created_at, email }) => ({
-    id,
-    full_name,
-    role,
-    employee_type,
-    created_at,
-    email,
+  await requireUserWithRole(["admin"]);
+  const [employeeProfiles, authUsers] = await Promise.all([
+    getEmployeeProfilesFromDb(),
+    listAllAuthUsers(),
+  ]);
+
+  const emailById = new Map(authUsers.map((u) => [u.id, u.email ?? undefined]));
+  const authMetaById = new Map(authUsers.map((u) => [u.id, u]));
+
+  return employeeProfiles.map((profile) => ({
+    id: profile.id,
+    full_name:
+      profile.full_name ??
+      authMetaById.get(profile.id)?.user_metadata?.full_name ??
+      authMetaById.get(profile.id)?.email?.split("@")[0] ??
+      "Employee",
+    role: "employee" as const,
+    employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+    created_at: profile.created_at,
+    email: emailById.get(profile.id),
   }));
 }
 
@@ -86,25 +175,27 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
   await requireUserWithRole(["admin"]);
   const admin = createAdminClient();
 
-  const overview = await getEmployeesOverview();
-  const employee = overview.find((e) => e.id === employeeId);
+  const employee = await getEmployeeStatsForId(employeeId);
   if (!employee) notFound();
 
-  const { data: leads } = await admin
-    .from("leads")
-    .select("*")
-    .eq("assigned_to", employeeId)
-    .order("assigned_at", { ascending: false });
+  const [{ data: leads }, { data: clients }] = await Promise.all([
+    admin
+      .from("leads")
+      .select("*")
+      .eq("assigned_to", employeeId)
+      .order("assigned_at", { ascending: false })
+      .limit(EMPLOYEE_DETAIL_LIST_LIMIT),
+    admin
+      .from("client_onboardings")
+      .select("*")
+      .eq("submitted_by", employeeId)
+      .order("created_at", { ascending: false })
+      .limit(EMPLOYEE_DETAIL_LIST_LIMIT),
+  ]);
 
   const allLeads = (leads ?? []) as Lead[];
   const activeLeads = allLeads.filter((l) => l.status !== "lost");
   const lostLeads = allLeads.filter((l) => l.status === "lost");
-
-  const { data: clients } = await admin
-    .from("client_onboardings")
-    .select("*")
-    .eq("submitted_by", employeeId)
-    .order("created_at", { ascending: false });
 
   return {
     ...employee,

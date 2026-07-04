@@ -11,21 +11,23 @@ import { SuccessToast } from "@/components/dashboard/success-toast";
 export default async function EmployeeDashboardPage() {
   const current = await requireUserWithRole(["employee"]);
   const supabase = await createClient();
-  const notifications = await getNotifications();
-
-  const { data: leads } = await supabase
-    .from("leads")
-    .select("*")
-    .eq("assigned_to", current.id)
-    .neq("status", "converted")
-    .neq("status", "lost")
-    .order("assigned_at", { ascending: false });
-
-  const { data: clients } = await supabase
-    .from("client_onboardings")
-    .select("*")
-    .eq("submitted_by", current.id)
-    .order("created_at", { ascending: false });
+  const [notifications, { data: leads }, { data: clients }] = await Promise.all([
+    getNotifications(),
+    supabase
+      .from("leads")
+      .select("*")
+      .eq("assigned_to", current.id)
+      .neq("status", "converted")
+      .neq("status", "lost")
+      .order("assigned_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("client_onboardings")
+      .select("*")
+      .eq("submitted_by", current.id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
 
   return (
     <div className="min-h-screen bg-background">

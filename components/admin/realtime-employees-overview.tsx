@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { getEmployeesOverview } from "@/lib/actions/employees";
 import type { EmployeeStats } from "@/lib/types/database";
 import { useRealtimeInvalidation } from "@/lib/hooks/use-realtime-record";
@@ -12,10 +12,6 @@ type RealtimeEmployeesOverviewProps = {
 
 export function RealtimeEmployeesOverview({ initialEmployees }: RealtimeEmployeesOverviewProps) {
   const [employees, setEmployees] = useState(initialEmployees);
-
-  useEffect(() => {
-    setEmployees(initialEmployees);
-  }, [initialEmployees]);
 
   const refresh = useCallback(() => {
     void getEmployeesOverview().then(setEmployees);

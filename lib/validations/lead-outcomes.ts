@@ -37,12 +37,6 @@ export type OutcomeReasonValue =
   | (typeof DROP_OUTCOME_REASONS)[number]["value"]
   | (typeof RESCHEDULE_OUTCOME_REASONS)[number]["value"];
 
-const allReasonValues = [
-  ...ACTIVE_OUTCOME_REASONS,
-  ...DROP_OUTCOME_REASONS,
-  ...RESCHEDULE_OUTCOME_REASONS,
-] as const;
-
 export function getOutcomeReasonsForCategory(category: OutcomeCategory) {
   switch (category) {
     case "active":

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateAfterUserCreated } from "@/lib/revalidate";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createUserSchema, type CreateUserInput } from "@/lib/validations/users";
@@ -81,8 +81,7 @@ async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionR
     return { success: false, error: profileError.message };
   }
 
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/dashboard");
+  revalidateAfterUserCreated();
   return { success: true };
 }
 

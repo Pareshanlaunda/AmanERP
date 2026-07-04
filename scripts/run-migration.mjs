@@ -40,6 +40,9 @@ const MIGRATION_FILES = [
   "supabase/migration-v9-employee-types-lead-fields.sql",
   "supabase/migration-v10-harassment-types.sql",
   "supabase/migration-v11-csa-employee-type.sql",
+  "supabase/migration-v12-clid-format.sql",
+  "supabase/migration-v13-clid-global-sequence.sql",
+  "supabase/migration-v14-employee-stats-indexes.sql",
 ];
 
 function getDatabaseUrls() {

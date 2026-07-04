@@ -1,17 +1,15 @@
 "use client";
 
-import type { Lead } from "@/lib/types/database";
-import { useRealtimeLead } from "@/lib/hooks/use-realtime-lead";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { useLeadLive } from "@/components/shared/lead-live-provider";
 
 type LiveLeadStatusProps = {
-  lead: Lead;
   variant?: "badge" | "alerts" | "all";
 };
 
-export function LiveLeadStatus({ lead: initialLead, variant = "all" }: LiveLeadStatusProps) {
-  const lead = useRealtimeLead(initialLead);
+export function LiveLeadStatus({ variant = "all" }: LiveLeadStatusProps) {
+  const { lead } = useLeadLive();
   const showBadge = variant === "badge" || variant === "all";
   const showAlerts = variant === "alerts" || variant === "all";
 

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { assignLead } from "@/lib/actions/leads";
 import type { Profile } from "@/lib/types/database";
 import { formatEmployeeOptionLabel } from "@/lib/labels/employees";
+import { useLeadLiveOptional } from "@/components/shared/lead-live-provider";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +24,7 @@ type AssignLeadFormProps = {
 };
 
 export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLeadFormProps) {
+  const leadLive = useLeadLiveOptional();
   const [isPending, startTransition] = useTransition();
   const [assignedTo, setAssignedTo] = useState(currentAssignee ?? "");
   const [comment, setComment] = useState("");
@@ -38,7 +40,15 @@ export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLea
       return;
     }
 
+    const previousAssignee = currentAssignee ?? null;
+
     startTransition(async () => {
+      leadLive?.setLeadOptimistic({
+        assigned_to: assignedTo,
+        status: "assigned",
+        assignment_comment: comment.trim() || null,
+      });
+
       const result = await assignLead({
         lead_id: leadId,
         assigned_to: assignedTo,
@@ -46,6 +56,10 @@ export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLea
       });
 
       if (!result.success) {
+        leadLive?.setLeadOptimistic({
+          assigned_to: previousAssignee,
+          status: leadLive.lead.status,
+        });
         toast.error(result.error);
         return;
       }
