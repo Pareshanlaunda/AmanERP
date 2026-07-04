@@ -1,8 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
+import {
+  revalidateAfterLeadCreated,
+  revalidateEmployeeDetail,
+  revalidateLeadMutation,
+} from "@/lib/revalidate";
 import {
   addLeadUpdateSchema,
   assignLeadSchema,
@@ -78,10 +82,11 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
         : `You have been assigned lead: ${lead.client_name}`,
       lead_id: lead.id,
     });
-    revalidatePath("/employee/dashboard");
+    revalidateAfterLeadCreated({ assigned: true });
+  } else {
+    revalidateAfterLeadCreated();
   }
 
-  revalidatePath("/admin/dashboard");
   return { success: true };
 }
 
@@ -126,9 +131,7 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
     lead_id: parsed.data.lead_id,
   });
 
-  revalidatePath("/admin/dashboard");
-  revalidatePath(`/admin/leads/${parsed.data.lead_id}`);
-  revalidatePath("/employee/dashboard");
+  revalidateLeadMutation(parsed.data.lead_id);
   return { success: true };
 }
 
@@ -178,9 +181,7 @@ export async function addLeadUpdate(data: AddLeadUpdateInput): Promise<ActionRes
     lead_id: parsed.data.lead_id,
   });
 
-  revalidatePath("/employee/dashboard");
-  revalidatePath(`/employee/leads/${parsed.data.lead_id}`);
-  revalidatePath("/admin/dashboard");
+  revalidateLeadMutation(parsed.data.lead_id);
   return { success: true };
 }
 
@@ -217,10 +218,7 @@ export async function markLeadInProgress(leadId: string): Promise<ActionResult> 
     status: "in_progress",
   });
 
-  revalidatePath("/employee/dashboard");
-  revalidatePath(`/employee/leads/${leadId}`);
-  revalidatePath("/admin/dashboard");
-  revalidatePath(`/admin/leads/${leadId}`);
+  revalidateLeadMutation(leadId);
   return { success: true };
 }
 
@@ -284,10 +282,7 @@ export async function markLeadSuccessful(
     lead_id: leadId,
   });
 
-  revalidatePath("/employee/dashboard");
-  revalidatePath(`/employee/leads/${leadId}`);
-  revalidatePath("/admin/dashboard");
-  revalidatePath(`/admin/leads/${leadId}`);
+  revalidateLeadMutation(leadId);
   return { success: true };
 }
 
@@ -356,11 +351,8 @@ export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionR
       lead_id: parsed.data.lead_id,
     });
 
-    revalidatePath("/employee/dashboard");
-    revalidatePath(`/employee/leads/${parsed.data.lead_id}`);
-    revalidatePath("/admin/dashboard");
-    revalidatePath(`/admin/leads/${parsed.data.lead_id}`);
-    revalidatePath(`/admin/employees/${user.id}`);
+    revalidateLeadMutation(parsed.data.lead_id);
+    revalidateEmployeeDetail(user.id);
     return { success: true };
   }
 
@@ -393,10 +385,7 @@ export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionR
     lead_id: parsed.data.lead_id,
   });
 
-  revalidatePath("/employee/dashboard");
-  revalidatePath(`/employee/leads/${parsed.data.lead_id}`);
-  revalidatePath("/admin/dashboard");
-  revalidatePath(`/admin/leads/${parsed.data.lead_id}`);
+  revalidateLeadMutation(parsed.data.lead_id);
   return { success: true };
 }
 

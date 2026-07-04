@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { markLeadInProgress } from "@/lib/actions/leads";
-import type { Lead } from "@/lib/types/database";
+import type { Lead, LeadStatus } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -17,21 +17,41 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export function AssignedLeadsTable({ leads }: { leads: Lead[] }) {
+export function AssignedLeadsTable({
+  leads,
+  emptyMessage,
+}: {
+  leads: Lead[];
+  emptyMessage?: string;
+}) {
   const [isPending, startTransition] = useTransition();
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, LeadStatus>>({});
+
+  const displayLeads = leads.map((lead) =>
+    statusOverrides[lead.id] ? { ...lead, status: statusOverrides[lead.id] } : lead
+  );
 
   function handleStartProgress(leadId: string) {
     startTransition(async () => {
+      setStatusOverrides((prev) => ({ ...prev, [leadId]: "in_progress" }));
       const result = await markLeadInProgress(leadId);
-      if (!result.success) toast.error(result.error);
-      else toast.success("Lead marked in progress");
+      if (!result.success) {
+        setStatusOverrides((prev) => {
+          const next = { ...prev };
+          delete next[leadId];
+          return next;
+        });
+        toast.error(result.error);
+      } else {
+        toast.success("Lead marked in progress");
+      }
     });
   }
 
-  if (leads.length === 0) {
+  if (displayLeads.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
-        No leads assigned yet. New assignments will appear here.
+        {emptyMessage ?? "No leads assigned yet. New assignments will appear here."}
       </div>
     );
   }
@@ -50,7 +70,7 @@ export function AssignedLeadsTable({ leads }: { leads: Lead[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {leads.map((lead) => (
+            {displayLeads.map((lead) => (
               <TableRow key={lead.id}>
                 <TableCell className="font-medium">{lead.client_name}</TableCell>
                 <TableCell>{lead.client_phone ?? "—"}</TableCell>
@@ -91,7 +111,7 @@ export function AssignedLeadsTable({ leads }: { leads: Lead[] }) {
       </div>
 
       <div className="table-mobile">
-        {leads.map((lead) => (
+        {displayLeads.map((lead) => (
           <div key={lead.id} className="data-card">
             <div className="data-card-header">
               <div>

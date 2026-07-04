@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadComment } from "@/lib/types/database";
@@ -13,7 +12,8 @@ export async function getLeadComments(leadId: string): Promise<LeadComment[]> {
     .from("lead_comments")
     .select("*")
     .eq("lead_id", leadId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(50);
 
   return (data ?? []) as LeadComment[];
 }
@@ -60,10 +60,6 @@ export async function addLeadComment(leadId: string, message: string): Promise<A
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath(`/admin/leads/${leadId}`);
-  revalidatePath(`/employee/leads/${leadId}`);
-  revalidatePath("/admin/dashboard");
-  revalidatePath("/employee/dashboard");
   return { success: true };
 }
 
@@ -77,7 +73,4 @@ export async function markCommentsRead(leadId: string) {
     user_id: user.id,
     last_read_at: new Date().toISOString(),
   });
-
-  revalidatePath(`/admin/leads/${leadId}`);
-  revalidatePath(`/employee/leads/${leadId}`);
 }

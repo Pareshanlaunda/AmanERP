@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { addLeadComment, markCommentsRead } from "@/lib/actions/comments";
@@ -29,15 +29,19 @@ export function LeadCommentsPanel({
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(true);
   const [hasUnread, setHasUnread] = useState(initialHasUnread);
-
-  useEffect(() => {
-    setHasUnread(initialHasUnread);
-  }, [initialHasUnread]);
+  const [optimisticComments, setOptimisticComments] = useState<LeadComment[]>([]);
+  const pendingCommentIds = useRef(new Set<string>());
 
   const handleCommentRow = useCallback(
     (comment: LeadComment, event: "INSERT" | "UPDATE" | "DELETE") => {
-      if (event === "INSERT" && comment.author_id !== currentUserId) {
-        setHasUnread(true);
+      if (event === "INSERT") {
+        pendingCommentIds.current.delete(comment.message);
+        setOptimisticComments((prev) =>
+          prev.filter((item) => item.message !== comment.message || item.author_id !== comment.author_id)
+        );
+        if (comment.author_id !== currentUserId) {
+          setHasUnread(true);
+        }
       }
     },
     [currentUserId]
@@ -53,6 +57,10 @@ export function LeadCommentsPanel({
     onRow: handleCommentRow,
   });
 
+  const displayedComments = [...liveComments, ...optimisticComments].sort((a, b) =>
+    a.created_at.localeCompare(b.created_at)
+  );
+
   function handleOpen() {
     if (!open) setOpen(true);
     if (hasUnread) {
@@ -66,11 +74,25 @@ export function LeadCommentsPanel({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
-    const message = new FormData(form).get("message") as string;
+    const message = (new FormData(form).get("message") as string).trim();
+    if (!message) return;
+
+    const optimistic: LeadComment = {
+      id: `optimistic-${Date.now()}`,
+      lead_id: leadId,
+      author_id: currentUserId,
+      message,
+      created_at: new Date().toISOString(),
+    };
+
+    pendingCommentIds.current.add(message);
+    setOptimisticComments((prev) => [...prev, optimistic]);
 
     startTransition(async () => {
       const result = await addLeadComment(leadId, message);
       if (!result.success) {
+        setOptimisticComments((prev) => prev.filter((item) => item.id !== optimistic.id));
+        pendingCommentIds.current.delete(message);
         toast.error(result.error);
         return;
       }
@@ -99,10 +121,10 @@ export function LeadCommentsPanel({
       {open && (
         <div className="space-y-4 p-4 sm:p-6">
           <div className="max-h-64 space-y-3 overflow-y-auto">
-            {liveComments.length === 0 ? (
+            {displayedComments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No comments yet. Start the discussion.</p>
             ) : (
-              liveComments.map((comment) => (
+              displayedComments.map((comment) => (
                 <div key={comment.id} className="rounded-md border bg-muted/30 p-3 text-sm">
                   <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{authorNames[comment.author_id] ?? "User"}</span>

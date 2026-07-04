@@ -27,51 +27,31 @@ import {
 
 
 type LeadsTableProps = {
-
   leads: Lead[];
-
   employees: Profile[];
-
   linkPrefix?: string;
-
   hideAssignedColumn?: boolean;
-
+  emptyMessage?: string;
 };
 
-
-
 export function LeadsTable({
-
   leads,
-
   employees,
-
   linkPrefix = "/admin/leads",
-
   hideAssignedColumn = false,
-
+  emptyMessage,
 }: LeadsTableProps) {
-
   const employeeMap = new Map(employees.map((e) => [e.id, e.full_name ?? "Employee"]));
 
-
-
   if (leads.length === 0) {
-
     return (
-
       <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-
-        {hideAssignedColumn
-
-          ? "No leads assigned to this employee yet."
-
-          : "No leads yet. Create your first test lead to get started."}
-
+        {emptyMessage ??
+          (hideAssignedColumn
+            ? "No leads assigned to this employee yet."
+            : "No leads yet. Create your first test lead to get started.")}
       </div>
-
     );
-
   }
 
 

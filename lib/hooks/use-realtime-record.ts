@@ -68,6 +68,7 @@ export function useRealtimeInvalidation(
   onInvalidateRef.current = onInvalidate;
   const tablesRef = useRef(tables);
   tablesRef.current = tables;
+  const tablesKey = tables.join(",");
 
   useEffect(() => {
     const supabase = createClient();
@@ -88,5 +89,5 @@ export function useRealtimeInvalidation(
       if (timer) clearTimeout(timer);
       void supabase.removeChannel(channel);
     };
-  }, [channelName, debounceMs, tables.join(",")]);
+  }, [channelName, debounceMs, tablesKey]);
 }

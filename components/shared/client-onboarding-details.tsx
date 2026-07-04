@@ -1,7 +1,7 @@
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { buildOnboardingSections } from "@/lib/onboarding-display";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { CidBadge } from "@/components/shared/cid-badge";
+import { ClidBadge } from "@/components/shared/clid-badge";
 
 function displayValue(label: string, raw: string | null | undefined) {
   if (!raw) return "—";
@@ -39,7 +39,7 @@ export function ClientOnboardingDetails({
     <div className="space-y-6">
       {(client.client_id || showSubmittedMeta) && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          {client.client_id && <CidBadge clientId={client.client_id} />}
+          {client.client_id ? <ClidBadge clientId={client.client_id} /> : null}
           {showSubmittedMeta && (
             <span className="text-muted-foreground">
               Submitted {formatDate(client.created_at)}

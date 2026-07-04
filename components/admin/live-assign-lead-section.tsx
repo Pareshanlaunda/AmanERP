@@ -1,16 +1,15 @@
 "use client";
 
-import type { Lead, Profile } from "@/lib/types/database";
-import { useRealtimeLead } from "@/lib/hooks/use-realtime-lead";
+import type { Profile } from "@/lib/types/database";
+import { useLeadLive } from "@/components/shared/lead-live-provider";
 import { AssignLeadForm } from "@/components/admin/assign-lead-form";
 
 type LiveAssignLeadSectionProps = {
-  lead: Lead;
   employees: Profile[];
 };
 
-export function LiveAssignLeadSection({ lead: initialLead, employees }: LiveAssignLeadSectionProps) {
-  const lead = useRealtimeLead(initialLead);
+export function LiveAssignLeadSection({ employees }: LiveAssignLeadSectionProps) {
+  const { lead } = useLeadLive();
 
   if (lead.status === "converted" || lead.status === "lost") {
     return null;

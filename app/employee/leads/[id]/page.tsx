@@ -3,17 +3,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getLeadComments, hasUnreadComments } from "@/lib/actions/comments";
+import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadUpdate } from "@/lib/types/database";
-import { getNotifications } from "@/lib/actions/notifications";
 import { AppHeader } from "@/components/shared/app-header";
-import { LeadDetailPanel } from "@/components/employee/lead-detail-panel";
+import { EmployeeLeadDetailLive } from "@/components/employee/employee-lead-detail-live";
 import { Button } from "@/components/ui/button";
-
-async function getAuthorNames(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data } = await supabase.from("profiles").select("id, full_name");
-  return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name ?? "User"]));
-}
+import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
 
 export default async function EmployeeLeadDetailPage({
   params,
@@ -33,31 +29,34 @@ export default async function EmployeeLeadDetailPage({
 
   if (!lead) notFound();
 
-  const { data: updates } = await supabase
-    .from("lead_updates")
-    .select("*")
-    .eq("lead_id", id)
-    .order("created_at", { ascending: false });
+  const typedLead = lead as Lead;
 
-  const comments = await getLeadComments(id);
-  const unread = await hasUnreadComments(id);
-  const authorNames = await getAuthorNames(supabase);
-  const notifications = await getNotifications();
+  const [updatesResult, comments, unread, authorNames, notifications, onboardingResult] =
+    await Promise.all([
+      supabase
+        .from("lead_updates")
+        .select("*")
+        .eq("lead_id", id)
+        .order("created_at", { ascending: false }),
+      getLeadComments(id),
+      hasUnreadComments(id),
+      getAuthorNamesFromComments(id, supabase),
+      getNotifications(),
+      typedLead.onboarding_record_id
+        ? supabase
+            .from("client_onboardings")
+            .select("client_id")
+            .eq("id", typedLead.onboarding_record_id)
+            .single()
+        : Promise.resolve({ data: null }),
+    ]);
 
-  let clientId: string | null = null;
-  if (lead.onboarding_record_id) {
-    const { data: onboarding } = await supabase
-      .from("client_onboardings")
-      .select("client_id")
-      .eq("id", lead.onboarding_record_id)
-      .single();
-    clientId = onboarding?.client_id ?? null;
-  }
+  const clientId = onboardingResult.data?.client_id ?? null;
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
-        title={(lead as Lead).client_name}
+        title={typedLead.client_name}
         subtitle="Lead progress and onboarding"
         userId={current.id}
         notifications={notifications}
@@ -70,10 +69,10 @@ export default async function EmployeeLeadDetailPage({
             Back to dashboard
           </Link>
         </Button>
-        <LeadDetailPanel
+        <EmployeeLeadDetailLive
           currentUserId={current.id}
-          lead={lead as Lead}
-          updates={(updates ?? []) as LeadUpdate[]}
+          lead={typedLead}
+          updates={(updatesResult.data ?? []) as LeadUpdate[]}
           comments={comments}
           hasUnreadComments={unread}
           authorNames={authorNames}

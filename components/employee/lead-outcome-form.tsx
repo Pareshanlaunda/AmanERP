@@ -10,6 +10,7 @@ import {
   OUTCOME_CATEGORIES,
   type OutcomeReasonValue,
 } from "@/lib/validations/lead-outcomes";
+import { useLeadLiveOptional } from "@/components/shared/lead-live-provider";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,7 @@ type LeadOutcomeFormProps = {
 
 export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadOutcomeFormProps) {
   const router = useRouter();
+  const leadLive = useLeadLiveOptional();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<OutcomeCategory>("active");
@@ -57,6 +59,22 @@ export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadO
     }
 
     startTransition(async () => {
+      const previousStatus = leadLive?.lead.status;
+      const previousOutcome = {
+        latest_outcome_category: leadLive?.lead.latest_outcome_category,
+        latest_outcome_reason: leadLive?.lead.latest_outcome_reason,
+        lost_reason: leadLive?.lead.lost_reason,
+        lost_at: leadLive?.lead.lost_at,
+      };
+
+      if (category === "drop") {
+        leadLive?.setLeadOptimistic({ status: "lost" });
+      } else if (category === "successful") {
+        leadLive?.setLeadOptimistic({ status: "converted" });
+      } else if (previousStatus === "assigned") {
+        leadLive?.setLeadOptimistic({ status: "in_progress" });
+      }
+
       const result = await recordLeadOutcome({
         lead_id: leadId,
         category,
@@ -65,6 +83,10 @@ export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadO
       });
 
       if (!result.success) {
+        leadLive?.setLeadOptimistic({
+          status: previousStatus,
+          ...previousOutcome,
+        });
         toast.error(result.error);
         return;
       }

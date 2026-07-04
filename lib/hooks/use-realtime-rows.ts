@@ -22,6 +22,7 @@ type UseRealtimeRowsOptions<T extends { id: string }> = {
   sortDescending?: boolean;
   includeRow?: (row: T, event: RealtimeEvent) => boolean;
   onRow?: (row: T, event: RealtimeEvent) => void;
+  enabled?: boolean;
 };
 
 function sortRows<T extends { id: string }>(
@@ -46,6 +47,7 @@ export function useRealtimeRows<T extends { id: string }>({
   sortDescending = true,
   includeRow,
   onRow,
+  enabled = true,
 }: UseRealtimeRowsOptions<T>) {
   const [rows, setRows] = useState(initialRows);
   const includeRowRef = useRef(includeRow);
@@ -62,6 +64,8 @@ export function useRealtimeRows<T extends { id: string }>({
   }, [initialRowsKey]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const supabase = createClient();
     const channel = supabase
       .channel(channelName)
@@ -105,7 +109,7 @@ export function useRealtimeRows<T extends { id: string }>({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [table, channelName, filter, sortBy, sortDescending]);
+  }, [table, channelName, filter, sortBy, sortDescending, enabled]);
 
   return rows;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { toast } from "sonner";
@@ -24,10 +24,28 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const panelRef = useRef<HTMLDivElement>(null);
-  const unread = notifications.filter((n) => !n.read_at);
+  const hydratedRef = useRef(false);
+  const unread = useMemo(
+    () => notifications.filter((n) => !n.read_at),
+    [notifications]
+  );
 
   useEffect(() => {
-    setNotifications(initialNotifications);
+    if (!hydratedRef.current) {
+      setNotifications(initialNotifications);
+      hydratedRef.current = true;
+      return;
+    }
+
+    setNotifications((prev) => {
+      const byId = new Map(prev.map((item) => [item.id, item]));
+      for (const item of initialNotifications) {
+        if (!byId.has(item.id)) byId.set(item.id, item);
+      }
+      return [...byId.values()]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 20);
+    });
   }, [initialNotifications]);
 
   useEffect(() => {

@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { Lead, Profile } from "@/lib/types/database";
+import { filterLeads } from "@/lib/filters/list-search";
+import { isActiveEmployeeLead } from "@/lib/filters/employee-leads";
 import { useRealtimeRows } from "@/lib/hooks/use-realtime-rows";
 import { LeadsTable } from "@/components/admin/leads-table";
 
@@ -12,15 +14,8 @@ type RealtimeLeadsTableProps = {
   hideAssignedColumn?: boolean;
   mode?: "admin" | "employee-assigned";
   userId?: string;
+  searchQuery?: string;
 };
-
-function isActiveEmployeeLead(lead: Lead, userId: string) {
-  return (
-    lead.assigned_to === userId &&
-    lead.status !== "converted" &&
-    lead.status !== "lost"
-  );
-}
 
 export function RealtimeLeadsTable({
   initialLeads,
@@ -29,6 +24,7 @@ export function RealtimeLeadsTable({
   hideAssignedColumn,
   mode = "admin",
   userId,
+  searchQuery = "",
 }: RealtimeLeadsTableProps) {
   const includeRow = useCallback(
     (lead: Lead) => {
@@ -43,18 +39,28 @@ export function RealtimeLeadsTable({
   const leads = useRealtimeRows({
     table: "leads",
     initialRows: initialLeads,
-    channelName: mode === "employee-assigned" ? `leads:employee:${userId}` : "leads:admin",
+    channelName: mode === "employee-assigned" ? `leads:employee-table:${userId}` : "leads:admin",
     sortBy: mode === "employee-assigned" ? "assigned_at" : "created_at",
     sortDescending: true,
     includeRow,
   });
 
+  const filteredLeads = useMemo(
+    () => filterLeads(leads, searchQuery),
+    [leads, searchQuery]
+  );
+
   return (
     <LeadsTable
-      leads={leads}
+      leads={filteredLeads}
       employees={employees}
       linkPrefix={linkPrefix}
       hideAssignedColumn={hideAssignedColumn}
+      emptyMessage={
+        leads.length > 0 && filteredLeads.length === 0
+          ? "No leads match your search."
+          : undefined
+      }
     />
   );
 }
