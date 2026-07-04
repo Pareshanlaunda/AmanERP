@@ -3,6 +3,7 @@ import Link from "next/link";
 import { UserPlus } from "lucide-react";
 
 import type { EmployeeStats } from "@/lib/types/database";
+import { EMPLOYEE_TYPE_LABELS } from "@/lib/types/database";
 
 import { Button } from "@/components/ui/button";
 
@@ -90,6 +91,8 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
 
                     <TableHead>Employee</TableHead>
 
+                    <TableHead>Type</TableHead>
+
                     <TableHead>Email</TableHead>
 
                     <TableHead className="text-center">Assigned</TableHead>
@@ -126,6 +129,10 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
 
                         </Link>
 
+                      </TableCell>
+
+                      <TableCell className="text-muted-foreground">
+                        {EMPLOYEE_TYPE_LABELS[employee.employee_type ?? "general"]}
                       </TableCell>
 
                       <TableCell className="text-muted-foreground">
@@ -195,6 +202,9 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
                   </Link>
 
                   <p className="mt-1 break-all text-muted-foreground">{employee.email ?? "—"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {EMPLOYEE_TYPE_LABELS[employee.employee_type ?? "general"]}
+                  </p>
 
                   <div className="mobile-stat-grid mt-4">
 

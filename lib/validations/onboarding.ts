@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { harassmentAnswerSchema, harassmentTypeSchema, encodeHarassmentFaced } from "@/lib/validations/harassment";
+import { loanTypeSchema } from "@/lib/validations/leads";
 
 export const occupationOptions = [
   { value: "government_employee", label: "Government Employee" },
@@ -26,6 +28,12 @@ export const yesNoOptions = [
   { value: "no", label: "No" },
 ] as const;
 
+export const earlyDropLikelihoodOptions = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
+
 const optionalNumberField = z.union([z.string(), z.number()]).optional();
 const optionalIntField = z.union([z.string(), z.number()]).optional();
 
@@ -48,6 +56,9 @@ export const onboardingFormSchema = z.object({
     .enum(["owned_by_client", "owned_by_parents", "rented_gated", "rented_not_gated"])
     .optional(),
   parent_alternate_phone: z.string().optional(),
+  loan_type: loanTypeSchema.optional(),
+  harassment_answer: harassmentAnswerSchema.optional(),
+  harassment_type: harassmentTypeSchema.optional(),
   loan_amount: optionalNumberField,
   number_of_lenders: optionalIntField,
   client_monthly_income: optionalNumberField,
@@ -71,10 +82,18 @@ export const onboardingFormSchema = z.object({
   truecaller_premium_agreed: z.enum(["yes", "no"]).optional(),
   cctv_agreed: z.enum(["yes", "no"]).optional(),
   parents_aware: z.enum(["yes", "no"]).optional(),
-  early_drop_likelihood: z.string().optional(),
+  early_drop_likelihood: z.enum(["low", "medium", "high"]).optional(),
   other_comments: z.string().optional(),
   advocate_name: z.string().min(1, "Advocate/CSA name is required"),
   advocate_email: z.string().email("Valid advocate email is required"),
+}).superRefine((data, ctx) => {
+  if (data.harassment_answer === "yes" && !data.harassment_type) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select calls or home visit",
+      path: ["harassment_type"],
+    });
+  }
 });
 
 export type OnboardingFormValues = z.infer<typeof onboardingFormSchema>;
@@ -92,6 +111,8 @@ export type ClientOnboarding = {
   marital_status: string | null;
   accommodation: string | null;
   parent_alternate_phone: string | null;
+  loan_type: string | null;
+  harassment_faced: string | null;
   loan_amount: number | null;
   number_of_lenders: number | null;
   client_monthly_income: number | null;
@@ -151,6 +172,8 @@ export function toDbPayload(data: OnboardingFormValues) {
     marital_status: data.marital_status ?? null,
     accommodation: data.accommodation ?? null,
     parent_alternate_phone: toNullableText(data.parent_alternate_phone),
+    loan_type: data.loan_type ?? null,
+    harassment_faced: encodeHarassmentFaced(data.harassment_answer, data.harassment_type) ?? null,
     loan_amount: toNullableNumber(data.loan_amount),
     number_of_lenders: toNullableInt(data.number_of_lenders),
     client_monthly_income: toNullableNumber(data.client_monthly_income),
@@ -172,7 +195,7 @@ export function toDbPayload(data: OnboardingFormValues) {
     truecaller_premium_agreed: yesNoToBoolean(data.truecaller_premium_agreed),
     cctv_agreed: yesNoToBoolean(data.cctv_agreed),
     parents_aware: yesNoToBoolean(data.parents_aware),
-    early_drop_likelihood: toNullableText(data.early_drop_likelihood),
+    early_drop_likelihood: data.early_drop_likelihood ?? null,
     other_comments: toNullableText(data.other_comments),
     advocate_name: data.advocate_name.trim(),
     advocate_email: data.advocate_email.trim(),

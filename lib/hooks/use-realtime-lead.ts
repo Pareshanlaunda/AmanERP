@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/types/database";
 
 export function useRealtimeLead(initialLead: Lead) {
   const [lead, setLead] = useState(initialLead);
+  const initialLeadRef = useRef(initialLead);
+  initialLeadRef.current = initialLead;
 
   useEffect(() => {
-    setLead(initialLead);
-  }, [initialLead]);
+    setLead(initialLeadRef.current);
+  }, [initialLead.id]);
 
   useEffect(() => {
     const supabase = createClient();

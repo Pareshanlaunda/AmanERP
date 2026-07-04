@@ -47,6 +47,7 @@ export async function getEmployeesOverview(): Promise<EmployeeStats[]> {
         user.email?.split("@")[0] ??
         "Employee",
       role: "employee",
+      employee_type: profile?.employee_type ?? "general",
       created_at: profile?.created_at ?? user.created_at,
       email: user.email ?? undefined,
       assigned_count: countByStatus(rows, "assigned"),
@@ -64,10 +65,11 @@ export async function getEmployeesOverview(): Promise<EmployeeStats[]> {
 
 export async function getEmployeeProfilesForAdmin(): Promise<(Profile & { email?: string })[]> {
   const overview = await getEmployeesOverview();
-  return overview.map(({ id, full_name, role, created_at, email }) => ({
+  return overview.map(({ id, full_name, role, employee_type, created_at, email }) => ({
     id,
     full_name,
     role,
+    employee_type,
     created_at,
     email,
   }));

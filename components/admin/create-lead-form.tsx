@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createLead } from "@/lib/actions/leads";
 import type { LoanType, Profile } from "@/lib/types/database";
+import { encodeHarassmentFaced, type HarassmentAnswer, type HarassmentType } from "@/lib/validations/harassment";
 import { LOAN_TYPE_OPTIONS } from "@/lib/validations/leads";
+import { HarassmentFacedFields } from "@/components/shared/harassment-faced-fields";
+import { formatEmployeeOptionLabel } from "@/lib/labels/employees";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +29,8 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loanType, setLoanType] = useState<LoanType | "">("");
+  const [harassmentAnswer, setHarassmentAnswer] = useState<HarassmentAnswer | "">("");
+  const [harassmentType, setHarassmentType] = useState<HarassmentType | "">("");
   const [assignedTo, setAssignedTo] = useState("");
 
   function handleSubmit(formData: FormData) {
@@ -34,6 +39,12 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
       loanAmountRaw && !Number.isNaN(Number(loanAmountRaw)) ? Number(loanAmountRaw) : undefined;
 
     startTransition(async () => {
+      const harassmentFaced = encodeHarassmentFaced(harassmentAnswer, harassmentType);
+      if (harassmentAnswer === "yes" && !harassmentFaced) {
+        toast.error("Select harassment type (Calls or Home Visit)");
+        return;
+      }
+
       const result = await createLead({
         client_name: formData.get("client_name") as string,
         client_phone: (formData.get("client_phone") as string) || undefined,
@@ -41,6 +52,7 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
         client_email: (formData.get("client_email") as string) || undefined,
         loan_amount: loanAmount,
         loan_type: loanType || undefined,
+        harassment_faced: harassmentFaced,
         notes: (formData.get("notes") as string) || undefined,
         assigned_to: assignedTo || undefined,
         assignment_comment: (formData.get("assignment_comment") as string) || undefined,
@@ -124,6 +136,12 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
               </Select>
             </div>
           </div>
+          <HarassmentFacedFields
+            answer={harassmentAnswer}
+            harassmentType={harassmentType}
+            onAnswerChange={setHarassmentAnswer}
+            onTypeChange={setHarassmentType}
+          />
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Textarea id="notes" name="notes" rows={3} placeholder="Initial lead notes..." />
@@ -166,7 +184,7 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
                   ) : (
                     employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.full_name ?? employee.email ?? "Employee"}
+                        {formatEmployeeOptionLabel(employee)}
                       </SelectItem>
                     ))
                   )}

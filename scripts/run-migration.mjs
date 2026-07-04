@@ -37,6 +37,9 @@ const MIGRATION_FILES = [
   "supabase/migration-v6-realtime-notifications.sql",
   "supabase/migration-v7-realtime-leads-comments.sql",
   "supabase/migration-v8-realtime-onboardings-profiles.sql",
+  "supabase/migration-v9-employee-types-lead-fields.sql",
+  "supabase/migration-v10-harassment-types.sql",
+  "supabase/migration-v11-csa-employee-type.sql",
 ];
 
 function getDatabaseUrls() {

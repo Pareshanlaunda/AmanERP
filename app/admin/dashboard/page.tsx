@@ -18,10 +18,11 @@ export default async function AdminDashboardPage() {
     getEmployeesOverview(),
   ]);
 
-  const employees = employeeStats.map(({ id, full_name, role, created_at, email }) => ({
+  const employees = employeeStats.map(({ id, full_name, role, employee_type, created_at, email }) => ({
     id,
     full_name,
     role,
+    employee_type,
     created_at,
     email,
   }));

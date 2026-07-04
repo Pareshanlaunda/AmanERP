@@ -18,16 +18,16 @@ export function useRealtimeRecord<T extends { id: string }>({
   channelName,
 }: UseRealtimeRecordOptions<T>) {
   const [record, setRecord] = useState<T | null>(initialRecord);
-
-  useEffect(() => {
-    setRecord(initialRecord);
-  }, [initialRecord]);
+  const initialRecordRef = useRef(initialRecord);
+  initialRecordRef.current = initialRecord;
 
   useEffect(() => {
     if (!recordId) {
       setRecord(null);
       return;
     }
+
+    setRecord(initialRecordRef.current);
 
     const supabase = createClient();
     const channel = supabase

@@ -1,6 +1,7 @@
 import type { Lead } from "@/lib/types/database";
-import { LOAN_TYPE_LABELS } from "@/lib/types/database";
+import { HARASSMENT_FACED_LABELS, LOAN_TYPE_LABELS } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { getOutcomeReasonLabel } from "@/lib/validations/lead-outcomes";
 
 export function LeadInfoFields({ lead }: { lead: Lead }) {
   return (
@@ -22,6 +23,16 @@ export function LeadInfoFields({ lead }: { lead: Lead }) {
         <span className="font-medium">Loan type:</span>{" "}
         {lead.loan_type ? LOAN_TYPE_LABELS[lead.loan_type] : "—"}
       </p>
+      <p>
+        <span className="font-medium">Harassment faced:</span>{" "}
+        {lead.harassment_faced ? HARASSMENT_FACED_LABELS[lead.harassment_faced] : "—"}
+      </p>
+      {lead.latest_outcome_category && lead.latest_outcome_reason && (
+        <p>
+          <span className="font-medium">Latest outcome:</span>{" "}
+          {getOutcomeReasonLabel(lead.latest_outcome_category, lead.latest_outcome_reason)}
+        </p>
+      )}
       <p>
         <span className="font-medium">Source:</span> {lead.source}
       </p>
