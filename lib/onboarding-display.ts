@@ -1,9 +1,12 @@
 import {
   accommodationOptions,
+  earlyDropLikelihoodOptions,
   maritalStatusOptions,
   occupationOptions,
   type ClientOnboarding,
 } from "@/lib/validations/onboarding";
+import type { HarassmentFaced, LoanType } from "@/lib/types/database";
+import { HARASSMENT_FACED_LABELS, LOAN_TYPE_LABELS } from "@/lib/types/database";
 
 const optionLabel = (
   options: readonly { value: string; label: string }[],
@@ -20,6 +23,10 @@ export function formatMaritalStatus(value: string | null | undefined) {
 
 export function formatAccommodation(value: string | null | undefined) {
   return optionLabel(accommodationOptions, value);
+}
+
+export function formatEarlyDropLikelihood(value: string | null | undefined) {
+  return optionLabel(earlyDropLikelihoodOptions, value);
 }
 
 export function formatYesNo(value: boolean | null | undefined) {
@@ -64,6 +71,16 @@ export function buildOnboardingSections(client: ClientOnboarding): OnboardingSec
       title: "Financial details",
       description: "Loan and income information",
       fields: [
+        {
+          label: "Loan type",
+          value: client.loan_type ? LOAN_TYPE_LABELS[client.loan_type as LoanType] : null,
+        },
+        {
+          label: "Harassment faced",
+          value: client.harassment_faced
+            ? HARASSMENT_FACED_LABELS[client.harassment_faced as HarassmentFaced]
+            : null,
+        },
         { label: "Loan amount", value: currency(client.loan_amount) },
         { label: "Number of lenders", value: number(client.number_of_lenders) },
         { label: "Client monthly income", value: currency(client.client_monthly_income) },
@@ -122,7 +139,7 @@ export function buildOnboardingSections(client: ClientOnboarding): OnboardingSec
         },
         { label: "CCTV agreed", value: formatYesNo(client.cctv_agreed) },
         { label: "Parents aware", value: formatYesNo(client.parents_aware) },
-        { label: "Early drop likelihood", value: text(client.early_drop_likelihood) },
+        { label: "Early drop likelihood", value: formatEarlyDropLikelihood(client.early_drop_likelihood) },
         { label: "Other comments", value: text(client.other_comments), fullWidth: true },
       ],
     },

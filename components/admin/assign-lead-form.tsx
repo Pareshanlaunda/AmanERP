@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { assignLead } from "@/lib/actions/leads";
 import type { Profile } from "@/lib/types/database";
+import { formatEmployeeOptionLabel } from "@/lib/labels/employees";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,7 +70,7 @@ export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLea
               <SelectContent>
                 {employees.map((employee) => (
                   <SelectItem key={employee.id} value={employee.id}>
-                    {employee.full_name ?? employee.email ?? employee.id.slice(0, 8)}
+                    {formatEmployeeOptionLabel(employee)}
                   </SelectItem>
                 ))}
               </SelectContent>

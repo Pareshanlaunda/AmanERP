@@ -7,13 +7,16 @@ import {
   addLeadUpdateSchema,
   assignLeadSchema,
   createLeadSchema,
-  rejectLeadSchema,
   type AddLeadUpdateInput,
   type AssignLeadInput,
   type CreateLeadInput,
-  type RejectLeadInput,
 } from "@/lib/validations/leads";
-import type { LeadStatus } from "@/lib/types/database";
+import {
+  formatOutcomeSummary,
+  leadOutcomeSchema,
+  type LeadOutcomeInput,
+} from "@/lib/validations/lead-outcomes";
+import type { LeadStatus, OutcomeCategory } from "@/lib/types/database";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -51,6 +54,7 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
       client_email: parsed.data.client_email?.trim() || null,
       loan_amount: parsed.data.loan_amount ?? null,
       loan_type: parsed.data.loan_type ?? null,
+      harassment_faced: parsed.data.harassment_faced ?? null,
       notes: parsed.data.notes?.trim() || null,
       source: "manual",
       status: isAssigned ? "assigned" : "new",
@@ -220,7 +224,10 @@ export async function markLeadInProgress(leadId: string): Promise<ActionResult> 
   return { success: true };
 }
 
-export async function markLeadSuccessful(leadId: string): Promise<ActionResult> {
+export async function markLeadSuccessful(
+  leadId: string,
+  outcome?: Pick<LeadOutcomeInput, "category" | "reason" | "notes">
+): Promise<ActionResult> {
   const user = await requireUserWithRole(["employee"]);
   const supabase = await createClient();
 
@@ -248,17 +255,25 @@ export async function markLeadSuccessful(leadId: string): Promise<ActionResult> 
     .update({
       status: "converted",
       converted_onboarding_id: lead.onboarding_record_id,
+      latest_outcome_category: outcome?.category ?? "successful",
+      latest_outcome_reason: outcome?.reason ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", leadId);
 
   if (error) return { success: false, error: error.message };
 
+  const note = outcome
+    ? formatOutcomeSummary(outcome.category, outcome.reason, outcome.notes)
+    : "Marked as successful — lead converted to client";
+
   await supabase.from("lead_updates").insert({
     lead_id: leadId,
     updated_by: user.id,
-    note: "Marked as successful — lead converted to client",
+    note,
     status: "converted",
+    outcome_category: outcome?.category ?? "successful",
+    outcome_reason: outcome?.reason ?? null,
   });
 
   await createNotification(supabase, {
@@ -276,11 +291,15 @@ export async function markLeadSuccessful(leadId: string): Promise<ActionResult> 
   return { success: true };
 }
 
-export async function markLeadLost(data: RejectLeadInput): Promise<ActionResult> {
+export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionResult> {
   const user = await requireUserWithRole(["employee"]);
-  const parsed = rejectLeadSchema.safeParse(data);
+  const parsed = leadOutcomeSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  if (parsed.data.category === "successful") {
+    return markLeadSuccessful(parsed.data.lead_id, parsed.data);
   }
 
   const supabase = await createClient();
@@ -296,36 +315,81 @@ export async function markLeadLost(data: RejectLeadInput): Promise<ActionResult>
   }
 
   if (!["assigned", "in_progress"].includes(lead.status)) {
-    return { success: false, error: "This lead cannot be marked as lost in its current status" };
+    return { success: false, error: "This lead cannot be updated in its current status" };
   }
 
-  const reason = parsed.data.reason.trim();
+  const summary = formatOutcomeSummary(parsed.data.category, parsed.data.reason, parsed.data.notes);
+  const category = parsed.data.category as OutcomeCategory;
+  const nextStatus: LeadStatus =
+    lead.status === "assigned" && category !== "drop" ? "in_progress" : (lead.status as LeadStatus);
 
-  const { error } = await supabase
+  if (category === "drop") {
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        status: "lost",
+        lost_reason: summary,
+        lost_at: new Date().toISOString(),
+        lost_by: user.id,
+        latest_outcome_category: category,
+        latest_outcome_reason: parsed.data.reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", parsed.data.lead_id);
+
+    if (error) return { success: false, error: error.message };
+
+    await supabase.from("lead_updates").insert({
+      lead_id: parsed.data.lead_id,
+      updated_by: user.id,
+      note: summary,
+      status: "lost",
+      outcome_category: category,
+      outcome_reason: parsed.data.reason,
+    });
+
+    await createNotification(supabase, {
+      user_id: lead.created_by,
+      type: "lead_updated",
+      title: "Lead marked as lost",
+      body: `${lead.client_name} was not converted. ${summary}`,
+      lead_id: parsed.data.lead_id,
+    });
+
+    revalidatePath("/employee/dashboard");
+    revalidatePath(`/employee/leads/${parsed.data.lead_id}`);
+    revalidatePath("/admin/dashboard");
+    revalidatePath(`/admin/leads/${parsed.data.lead_id}`);
+    revalidatePath(`/admin/employees/${user.id}`);
+    return { success: true };
+  }
+
+  const { error: leadError } = await supabase
     .from("leads")
     .update({
-      status: "lost",
-      lost_reason: reason,
-      lost_at: new Date().toISOString(),
-      lost_by: user.id,
+      status: nextStatus,
+      latest_outcome_category: category,
+      latest_outcome_reason: parsed.data.reason,
       updated_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.lead_id);
 
-  if (error) return { success: false, error: error.message };
+  if (leadError) return { success: false, error: leadError.message };
 
   await supabase.from("lead_updates").insert({
     lead_id: parsed.data.lead_id,
     updated_by: user.id,
-    note: `Lead marked as lost: ${reason}`,
-    status: "lost",
+    note: summary,
+    status: nextStatus,
+    outcome_category: category,
+    outcome_reason: parsed.data.reason,
   });
 
   await createNotification(supabase, {
     user_id: lead.created_by,
     type: "lead_updated",
-    title: "Lead marked as lost",
-    body: `${lead.client_name} was not converted. Reason: ${reason}`,
+    title: category === "reschedule" ? "Lead rescheduled" : "Lead progress update",
+    body: `${lead.client_name}: ${summary}`,
     lead_id: parsed.data.lead_id,
   });
 
@@ -333,8 +397,14 @@ export async function markLeadLost(data: RejectLeadInput): Promise<ActionResult>
   revalidatePath(`/employee/leads/${parsed.data.lead_id}`);
   revalidatePath("/admin/dashboard");
   revalidatePath(`/admin/leads/${parsed.data.lead_id}`);
-  revalidatePath(`/admin/employees/${user.id}`);
   return { success: true };
+}
+
+export async function markLeadLost(data: LeadOutcomeInput): Promise<ActionResult> {
+  if (data.category !== "drop") {
+    return { success: false, error: "Use recordLeadOutcome for this update" };
+  }
+  return recordLeadOutcome(data);
 }
 
 export async function notifyLeadConverted(

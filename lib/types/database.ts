@@ -1,5 +1,7 @@
 export type UserRole = "admin" | "employee";
 
+export type EmployeeType = "advocate" | "csa" | "hr" | "director" | "finance" | "general";
+
 export type LeadStatus =
   | "new"
   | "assigned"
@@ -8,7 +10,15 @@ export type LeadStatus =
   | "converted"
   | "lost";
 
-export type LoanType = "secured" | "unsecured" | "credit_card";
+export type LoanType = "personal_business" | "credit_card" | "both";
+
+export type HarassmentFaced =
+  | "no"
+  | "yes_calls"
+  | "yes_home_visit"
+  | "yes_calls_home_visit";
+
+export type OutcomeCategory = "active" | "drop" | "reschedule" | "successful";
 
 export type NotificationType = "lead_assigned" | "lead_converted" | "lead_updated";
 
@@ -16,6 +26,7 @@ export type Profile = {
   id: string;
   full_name: string | null;
   role: UserRole;
+  employee_type: EmployeeType | null;
   created_at: string;
 };
 
@@ -30,6 +41,7 @@ export type Lead = {
   client_email: string | null;
   loan_amount: number | null;
   loan_type: LoanType | null;
+  harassment_faced: HarassmentFaced | null;
   notes: string | null;
   source: string;
   status: LeadStatus;
@@ -41,6 +53,8 @@ export type Lead = {
   lost_reason: string | null;
   lost_at: string | null;
   lost_by: string | null;
+  latest_outcome_category: OutcomeCategory | null;
+  latest_outcome_reason: string | null;
   lead_id?: string | null;
 };
 
@@ -58,6 +72,8 @@ export type LeadUpdate = {
   updated_by: string;
   note: string;
   status: LeadStatus | null;
+  outcome_category: OutcomeCategory | null;
+  outcome_reason: string | null;
   created_at: string;
 };
 
@@ -91,7 +107,30 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
 };
 
 export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
-  secured: "Secured",
-  unsecured: "Unsecured",
-  credit_card: "Credit card",
+  personal_business: "Personal Loan / Business Loan",
+  credit_card: "Credit Card",
+  both: "Both",
+};
+
+export const HARASSMENT_FACED_LABELS: Record<HarassmentFaced, string> = {
+  no: "No",
+  yes_calls: "Yes — Calls",
+  yes_home_visit: "Yes — Home Visit",
+  yes_calls_home_visit: "Yes — Calls & Home Visit",
+};
+
+export const EMPLOYEE_TYPE_LABELS: Record<EmployeeType, string> = {
+  advocate: "Advocate",
+  csa: "CSA",
+  hr: "HR",
+  director: "Director",
+  finance: "Finance",
+  general: "Employee",
+};
+
+export const OUTCOME_CATEGORY_LABELS: Record<OutcomeCategory, string> = {
+  active: "Active",
+  drop: "Drop",
+  reschedule: "Reschedule",
+  successful: "Successful",
 };

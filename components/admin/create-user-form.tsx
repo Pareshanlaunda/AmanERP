@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createFirstAdmin, createUser } from "@/lib/actions/users";
-import type { UserRole } from "@/lib/types/database";
+import type { UserRole, EmployeeType } from "@/lib/types/database";
+import { EMPLOYEE_TYPE_FORM_OPTIONS } from "@/lib/validations/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -26,6 +27,7 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [role, setRole] = useState<UserRole>(defaultRole);
+  const [employeeType, setEmployeeType] = useState<EmployeeType>("general");
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -38,6 +40,7 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
         password: formData.get("password") as string,
         full_name: formData.get("full_name") as string,
         role: mode === "setup" ? ("admin" as const) : role,
+        employee_type: mode === "setup" || role === "admin" ? undefined : employeeType,
       };
 
       const result =
@@ -54,6 +57,7 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
       } else {
         form.reset();
         setRole(defaultRole);
+        setEmployeeType("general");
       }
     });
   }
@@ -91,18 +95,40 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
             />
           </div>
           {mode === "admin" && (
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label>Access role</Label>
+                <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Employee</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {role === "employee" && (
+                <div className="space-y-2">
+                  <Label>Employee type</Label>
+                  <Select
+                    value={employeeType}
+                    onValueChange={(v) => setEmployeeType(v as EmployeeType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMPLOYEE_TYPE_FORM_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </>
           )}
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
             {isPending ? "Creating..." : mode === "setup" ? "Create admin & go to login" : "Create user"}

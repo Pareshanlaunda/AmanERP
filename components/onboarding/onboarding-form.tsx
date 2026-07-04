@@ -1,23 +1,33 @@
 "use client";
 
 import { useEffect, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { submitOnboarding } from "@/lib/actions/onboarding";
 import {
   accommodationOptions,
+  earlyDropLikelihoodOptions,
   maritalStatusOptions,
   occupationOptions,
   onboardingFormSchema,
   yesNoOptions,
   type OnboardingFormValues,
 } from "@/lib/validations/onboarding";
+import { LOAN_TYPE_OPTIONS } from "@/lib/validations/leads";
+import { HarassmentFacedFieldGroup } from "@/components/onboarding/harassment-faced-field-group";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField, FormSection } from "@/components/onboarding/form-section";
 import { RadioFieldGroup } from "@/components/onboarding/radio-field-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type OnboardingFormProps = {
   leadId?: string;
@@ -118,6 +128,21 @@ export function OnboardingForm({
       </FormSection>
 
       <FormSection title="Financial Details" description="Loan and income information">
+        <RadioFieldGroup
+          control={control}
+          name="loan_type"
+          label="Loan type"
+          options={LOAN_TYPE_OPTIONS}
+          error={errors.loan_type?.message}
+          fullWidth
+        />
+        <HarassmentFacedFieldGroup
+          control={control}
+          answerName="harassment_answer"
+          typeName="harassment_type"
+          answerError={errors.harassment_answer?.message}
+          typeError={errors.harassment_type?.message}
+        />
         <FormField label="Loan Amount" error={errors.loan_amount?.message}>
           <Input {...register("loan_amount")} type="number" min="0" step="0.01" placeholder="0" />
         </FormField>
@@ -211,9 +236,26 @@ export function OnboardingForm({
           options={yesNoOptions}
           error={errors.parents_aware?.message}
         />
-        <FormField label="Likelihood of early drop" error={errors.early_drop_likelihood?.message}>
-          <Input {...register("early_drop_likelihood")} placeholder="Low / Medium / High" />
-        </FormField>
+        <Controller
+          control={control}
+          name="early_drop_likelihood"
+          render={({ field }) => (
+            <FormField label="Likelihood of early drop" error={errors.early_drop_likelihood?.message}>
+              <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select likelihood" />
+                </SelectTrigger>
+                <SelectContent>
+                  {earlyDropLikelihoodOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        />
         <FormField label="Any other comments" error={errors.other_comments?.message} fullWidth>
           <Textarea {...register("other_comments")} rows={3} />
         </FormField>

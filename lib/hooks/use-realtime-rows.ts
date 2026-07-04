@@ -50,12 +50,16 @@ export function useRealtimeRows<T extends { id: string }>({
   const [rows, setRows] = useState(initialRows);
   const includeRowRef = useRef(includeRow);
   const onRowRef = useRef(onRow);
+  const initialRowsRef = useRef(initialRows);
+  initialRowsRef.current = initialRows;
   includeRowRef.current = includeRow;
   onRowRef.current = onRow;
 
+  const initialRowsKey = initialRows.map((row) => row.id).join(",");
+
   useEffect(() => {
-    setRows(initialRows);
-  }, [initialRows]);
+    setRows(initialRowsRef.current);
+  }, [initialRowsKey]);
 
   useEffect(() => {
     const supabase = createClient();

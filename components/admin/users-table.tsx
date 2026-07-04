@@ -1,4 +1,5 @@
 import type { Profile } from "@/lib/types/database";
+import { EMPLOYEE_TYPE_LABELS } from "@/lib/types/database";
 
 import { formatDate } from "@/lib/format";
 
@@ -64,6 +65,8 @@ export function UsersTable({ users }: UsersTableProps) {
 
               <TableHead>Role</TableHead>
 
+              <TableHead>Type</TableHead>
+
               <TableHead>Created</TableHead>
 
             </TableRow>
@@ -81,6 +84,12 @@ export function UsersTable({ users }: UsersTableProps) {
                 <TableCell>{user.email ?? "—"}</TableCell>
 
                 <TableCell className="capitalize">{user.role}</TableCell>
+
+                <TableCell>
+                  {user.role === "employee"
+                    ? EMPLOYEE_TYPE_LABELS[user.employee_type ?? "general"]
+                    : "—"}
+                </TableCell>
 
                 <TableCell>{formatDate(user.created_at)}</TableCell>
 
@@ -121,6 +130,11 @@ export function UsersTable({ users }: UsersTableProps) {
             </div>
 
             <p className="mt-3 text-muted-foreground">Created: {formatDate(user.created_at)}</p>
+            {user.role === "employee" && (
+              <p className="mt-1 text-muted-foreground">
+                Type: {EMPLOYEE_TYPE_LABELS[user.employee_type ?? "general"]}
+              </p>
+            )}
 
           </div>
 

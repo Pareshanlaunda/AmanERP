@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import type { EmployeeDetail } from "@/lib/actions/employees";
 import type { Lead } from "@/lib/types/database";
+import { EMPLOYEE_TYPE_LABELS } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { useRealtimeRows } from "@/lib/hooks/use-realtime-rows";
 import { LeadsTable } from "@/components/admin/leads-table";
@@ -66,6 +67,12 @@ export function RealtimeEmployeeDetailSections({
           <h2 className="section-title">Summary</h2>
         </div>
         <div className="grid gap-4 p-4 text-sm sm:grid-cols-2 sm:p-6 lg:grid-cols-5">
+          <div>
+            <div className="text-muted-foreground">Employee type</div>
+            <div className="font-medium">
+              {EMPLOYEE_TYPE_LABELS[initial.employee_type ?? "general"]}
+            </div>
+          </div>
           <div>
             <div className="text-muted-foreground">Email</div>
             <div className="font-medium">{initial.email ?? "—"}</div>

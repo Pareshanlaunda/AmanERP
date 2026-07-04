@@ -73,6 +73,7 @@ async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionR
     id: authData.user.id,
     full_name: data.full_name.trim(),
     role: data.role,
+    employee_type: data.role === "employee" ? (data.employee_type ?? "general") : null,
   });
 
   if (profileError) {
