@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { adminExists } from "@/lib/actions/users";
-import { dashboardPathForRole, getUserWithRole } from "@/lib/auth/get-user";
+import { getUserWithRole, dashboardPathForRole } from "@/lib/auth/get-user";
 
 export default async function HomePage() {
   const current = await getUserWithRole();
@@ -9,6 +8,7 @@ export default async function HomePage() {
     redirect(dashboardPathForRole(current.role));
   }
 
-  const hasAdmin = await adminExists();
-  redirect(hasAdmin ? "/login" : "/setup");
+  // Admin already exists — always send unauthenticated users to login.
+  // The /setup route has its own guard if someone needs first-time setup.
+  redirect("/login");
 }

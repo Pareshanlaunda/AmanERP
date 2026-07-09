@@ -4,9 +4,11 @@ import { ArrowLeft } from "lucide-react";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
+import type { Lead } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
 import { LiveClientOnboardingDetails } from "@/components/shared/live-client-onboarding-details";
+import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
 import { Button } from "@/components/ui/button";
 
 export default async function AdminClientDetailPage({
@@ -32,6 +34,17 @@ export default async function AdminClientDetailPage({
     ? `/admin/leads/${typedClient.lead_id}`
     : "/admin/dashboard";
 
+  let linkedLead: Pick<Lead, "id" | "source" | "client_name" | "client_phone"> | null = null;
+  if (typedClient.lead_id) {
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id, source, client_name, client_phone")
+      .eq("id", typedClient.lead_id)
+      .maybeSingle();
+    linkedLead =
+      (lead as Pick<Lead, "id" | "source" | "client_name" | "client_phone"> | null) ?? null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
@@ -49,6 +62,16 @@ export default async function AdminClientDetailPage({
           </Link>
         </Button>
         <LiveClientOnboardingDetails clientId={typedClient.id} initialClient={typedClient} />
+        {linkedLead?.source === "whatsapp" && (
+          <WhatsAppChatPanel
+            leadId={linkedLead.id}
+            clientName={typedClient.client_name ?? linkedLead.client_name}
+            clientPhone={
+              typedClient.client_contact_number ?? linkedLead.client_phone
+            }
+            enabled
+          />
+        )}
       </main>
     </div>
   );

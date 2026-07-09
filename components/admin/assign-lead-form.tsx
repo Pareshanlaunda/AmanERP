@@ -91,13 +91,13 @@ export function AssignLeadForm({ leadId, employees, currentAssignee }: AssignLea
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="assignment_comment">Comment for employee (optional)</Label>
+            <Label htmlFor="assignment_comment">Additional info for employee (optional)</Label>
             <Textarea
               id="assignment_comment"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={3}
-              placeholder="Instructions or context for this lead..."
+              placeholder="Context or instructions — shown under Additional info on the lead"
             />
           </div>
           <Button type="submit" disabled={isPending} className="w-full sm:w-auto">

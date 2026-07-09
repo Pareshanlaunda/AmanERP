@@ -4,10 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createLead } from "@/lib/actions/leads";
-import type { LoanType, Profile } from "@/lib/types/database";
-import { encodeHarassmentFaced, type HarassmentAnswer, type HarassmentType } from "@/lib/validations/harassment";
-import { LOAN_TYPE_OPTIONS } from "@/lib/validations/leads";
-import { HarassmentFacedFields } from "@/components/shared/harassment-faced-fields";
+import type { HarassmentFaced, LoanType, Profile } from "@/lib/types/database";
+import {
+  CLIENT_DETAILS_LABELS,
+  CREDIT_CARD_RANGE_OPTIONS,
+  LOAN_TYPE_OPTIONS,
+  PERSONAL_LOAN_RANGE_OPTIONS,
+  RECOVERY_HARASSMENT_OPTIONS,
+} from "@/lib/validations/leads";
 import { formatEmployeeOptionLabel } from "@/lib/labels/employees";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,30 +33,22 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loanType, setLoanType] = useState<LoanType | "">("");
-  const [harassmentAnswer, setHarassmentAnswer] = useState<HarassmentAnswer | "">("");
-  const [harassmentType, setHarassmentType] = useState<HarassmentType | "">("");
+  const [personalLoanRange, setPersonalLoanRange] = useState("");
+  const [creditCardRange, setCreditCardRange] = useState("");
+  const [harassmentFaced, setHarassmentFaced] = useState<HarassmentFaced | "">("");
   const [assignedTo, setAssignedTo] = useState("");
 
   function handleSubmit(formData: FormData) {
-    const loanAmountRaw = (formData.get("loan_amount") as string)?.trim();
-    const loanAmount =
-      loanAmountRaw && !Number.isNaN(Number(loanAmountRaw)) ? Number(loanAmountRaw) : undefined;
-
     startTransition(async () => {
-      const harassmentFaced = encodeHarassmentFaced(harassmentAnswer, harassmentType);
-      if (harassmentAnswer === "yes" && !harassmentFaced) {
-        toast.error("Select harassment type (Calls or Home Visit)");
-        return;
-      }
-
       const result = await createLead({
         client_name: formData.get("client_name") as string,
         client_phone: (formData.get("client_phone") as string) || undefined,
         client_alternate_phone: (formData.get("client_alternate_phone") as string) || undefined,
         client_email: (formData.get("client_email") as string) || undefined,
-        loan_amount: loanAmount,
         loan_type: loanType || undefined,
-        harassment_faced: harassmentFaced,
+        personal_loan_amount_range: personalLoanRange || undefined,
+        credit_card_amount_range: creditCardRange || undefined,
+        harassment_faced: harassmentFaced || undefined,
         notes: (formData.get("notes") as string) || undefined,
         assigned_to: assignedTo || undefined,
         assignment_comment: (formData.get("assignment_comment") as string) || undefined,
@@ -72,7 +68,10 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
     <section className="erp-panel w-full overflow-hidden">
       <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
         <h2 className="section-title">Create lead</h2>
-        <p className="section-subtitle">Add client details and optionally assign to an employee.</p>
+        <p className="section-subtitle">
+          Manual entry only (walk-in, phone, etc.). WhatsApp leads are created automatically — no
+          form needed.
+        </p>
       </div>
       <div className="p-4 sm:p-6">
         <form
@@ -83,13 +82,13 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
           className="space-y-4"
         >
           <div className="space-y-2">
-            <Label htmlFor="client_name">Client name *</Label>
+            <Label htmlFor="client_name">{CLIENT_DETAILS_LABELS.fullName} *</Label>
             <Input id="client_name" name="client_name" required placeholder="Full name" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="client_phone">Mobile number</Label>
-              <Input id="client_phone" name="client_phone" type="tel" placeholder="+91..." />
+              <Label htmlFor="client_phone">{CLIENT_DETAILS_LABELS.mobile}</Label>
+              <Input id="client_phone" name="client_phone" type="tel" placeholder="9876543210" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="client_alternate_phone">Alternate mobile number</Label>
@@ -97,54 +96,90 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
                 id="client_alternate_phone"
                 name="client_alternate_phone"
                 type="tel"
-                placeholder="+91..."
+                placeholder="Optional"
               />
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="client_email">Email</Label>
-            <Input id="client_email" name="client_email" type="email" placeholder="client@email.com" />
+            <Input id="client_email" name="client_email" type="email" placeholder="Optional" />
+          </div>
+          <div className="space-y-2">
+            <Label>{CLIENT_DETAILS_LABELS.loanType}</Label>
+            <Select
+              value={loanType || undefined}
+              onValueChange={(value) => setLoanType(value as LoanType)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select loan type" />
+              </SelectTrigger>
+              <SelectContent>
+                {LOAN_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="loan_amount">Loan amount</Label>
-              <Input
-                id="loan_amount"
-                name="loan_amount"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Loan type</Label>
-              <Select
-                value={loanType || undefined}
-                onValueChange={(value) => setLoanType(value as LoanType)}
-              >
+              <Label>{CLIENT_DETAILS_LABELS.personalLoanAmount}</Label>
+              <Select value={personalLoanRange || undefined} onValueChange={setPersonalLoanRange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select loan type" />
+                  <SelectValue placeholder="Select range" />
                 </SelectTrigger>
                 <SelectContent>
-                  {LOAN_TYPE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  {PERSONAL_LOAN_RANGE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{CLIENT_DETAILS_LABELS.creditCardAmount}</Label>
+              <Select value={creditCardRange || undefined} onValueChange={setCreditCardRange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CREDIT_CARD_RANGE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <HarassmentFacedFields
-            answer={harassmentAnswer}
-            harassmentType={harassmentType}
-            onAnswerChange={setHarassmentAnswer}
-            onTypeChange={setHarassmentType}
-          />
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" name="notes" rows={3} placeholder="Initial lead notes..." />
+            <Label>{CLIENT_DETAILS_LABELS.recoveryHarassment}</Label>
+            <Select
+              value={harassmentFaced || undefined}
+              onValueChange={(value) => setHarassmentFaced(value as HarassmentFaced)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select option" />
+              </SelectTrigger>
+              <SelectContent>
+                {RECOVERY_HARASSMENT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="notes">Additional info (optional)</Label>
+            <Textarea
+              id="notes"
+              name="notes"
+              rows={3}
+              placeholder="Internal notes for the team — shown under Additional info on the lead"
+            />
           </div>
 
           <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-4">
@@ -169,10 +204,7 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
                   </Button>
                 )}
               </div>
-              <Select
-                value={assignedTo || undefined}
-                onValueChange={setAssignedTo}
-              >
+              <Select value={assignedTo || undefined} onValueChange={setAssignedTo}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select employee (optional)" />
                 </SelectTrigger>
@@ -193,12 +225,12 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
             </div>
             {assignedTo && (
               <div className="space-y-2">
-                <Label htmlFor="assignment_comment">Comment for employee (optional)</Label>
+                <Label htmlFor="assignment_comment">Additional info for employee (optional)</Label>
                 <Textarea
                   id="assignment_comment"
                   name="assignment_comment"
                   rows={3}
-                  placeholder="Instructions or context for this lead..."
+                  placeholder="Context or instructions — shown under Additional info on the lead"
                 />
               </div>
             )}

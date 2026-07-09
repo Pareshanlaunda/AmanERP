@@ -10,6 +10,7 @@ import { LeadInfoFields } from "@/components/shared/lead-info-fields";
 import { LiveLeadStatus } from "@/components/shared/live-lead-status";
 import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
 import { LeadLiveProvider, useLeadLive } from "@/components/shared/lead-live-provider";
+import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
 
 type AdminLeadDetailLiveProps = {
   lead: Lead;
@@ -33,14 +34,21 @@ function AdminLeadInfoSection() {
       </div>
       <div className="space-y-2 p-4 text-sm sm:p-6">
         <LeadInfoFields lead={lead} />
-        {lead.notes && (
-          <p>
-            <span className="font-medium">Notes:</span> {lead.notes}
-          </p>
-        )}
         <LiveLeadStatus variant="alerts" />
       </div>
     </section>
+  );
+}
+
+function AdminWhatsAppSection({ leadId }: { leadId: string }) {
+  const { lead } = useLeadLive();
+  return (
+    <WhatsAppChatPanel
+      leadId={leadId}
+      clientName={lead.client_name}
+      clientPhone={lead.client_phone}
+      enabled={lead.source === "whatsapp"}
+    />
   );
 }
 
@@ -61,6 +69,8 @@ export function AdminLeadDetailLive(props: AdminLeadDetailLiveProps) {
         hasUnread={hasUnread}
         authorNames={authorNames}
       />
+
+      <AdminWhatsAppSection leadId={lead.id} />
 
       <LiveAssignLeadSection employees={employees} />
 

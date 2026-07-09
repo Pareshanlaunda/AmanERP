@@ -17,7 +17,7 @@ export function LiveLeadStatus({ variant = "all" }: LiveLeadStatusProps) {
     <>
       {showBadge && <StatusBadge status={lead.status} />}
       {showAlerts && lead.status === "converted" && (
-        <p className="font-medium text-green-700">This lead has been converted to a client.</p>
+        <p className="font-medium text-emerald-700 dark:text-emerald-400">This lead has been converted to a client.</p>
       )}
       {showAlerts && lead.status === "lost" && lead.lost_reason && (
         <div className="rounded-md bg-destructive/5 p-3 text-destructive">

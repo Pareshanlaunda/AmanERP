@@ -57,6 +57,8 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
       client_alternate_phone: parsed.data.client_alternate_phone?.trim() || null,
       client_email: parsed.data.client_email?.trim() || null,
       loan_amount: parsed.data.loan_amount ?? null,
+      personal_loan_amount_range: parsed.data.personal_loan_amount_range?.trim() || null,
+      credit_card_amount_range: parsed.data.credit_card_amount_range?.trim() || null,
       loan_type: parsed.data.loan_type ?? null,
       harassment_faced: parsed.data.harassment_faced ?? null,
       notes: parsed.data.notes?.trim() || null,

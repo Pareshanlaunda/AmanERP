@@ -4,7 +4,13 @@ import { employeeTypeSchema } from "@/lib/validations/leads";
 export const createUserSchema = z
   .object({
     email: z.string().email("Valid email is required"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .refine(
+        (val) => /[a-zA-Z]/.test(val) && /[0-9]/.test(val),
+        "Password must contain at least one letter and one number"
+      ),
     full_name: z.string().min(1, "Name is required"),
     role: z.enum(["admin", "employee"]),
     employee_type: employeeTypeSchema.optional(),

@@ -12,6 +12,7 @@ import { ClidBadge } from "@/components/shared/clid-badge";
 import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
 import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
 import { useLeadLive } from "@/components/shared/lead-live-provider";
+import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
 import { useRealtimeRecord } from "@/lib/hooks/use-realtime-record";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { Button } from "@/components/ui/button";
@@ -80,17 +81,6 @@ export function LeadDetailPanel({
             </div>
           )}
           <LeadInfoFields lead={lead} />
-          {lead.notes && (
-            <p>
-              <span className="font-medium">Notes:</span> {lead.notes}
-            </p>
-          )}
-          {lead.assignment_comment && (
-            <div className="rounded-md bg-muted p-3">
-              <p className="font-medium">Admin assignment comment</p>
-              <p className="mt-1 text-muted-foreground">{lead.assignment_comment}</p>
-            </div>
-          )}
         </div>
       </section>
 
@@ -102,6 +92,13 @@ export function LeadDetailPanel({
         authorNames={authorNames}
       />
 
+      <WhatsAppChatPanel
+        leadId={lead.id}
+        clientName={lead.client_name}
+        clientPhone={lead.client_phone}
+        enabled={lead.source === "whatsapp"}
+      />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {lead.status === "assigned" && (
           <Button onClick={handleStartProgress} disabled={isPending} className="w-full sm:w-auto">
@@ -110,7 +107,9 @@ export function LeadDetailPanel({
         )}
         {lead.status === "in_progress" && !lead.onboarding_record_id && (
           <Button asChild className="w-full sm:w-auto">
-            <Link href={`/onboarding/new?leadId=${lead.id}`}>Onboard client</Link>
+            <Link href={`/onboarding/new?leadId=${lead.id}`}>
+              {lead.source === "whatsapp" ? "Add call details" : "Onboard client"}
+            </Link>
           </Button>
         )}
       </div>

@@ -27,6 +27,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+/logs/
 
 # env files
 .env
@@ -38,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# WhatsApp / Botbiz PII dumps — never commit
+components/Whatsapp/flowdata_*.csv
+components/Whatsapp/whatsapp-bot_*.txt
+logs/botbiz-*.json
+
