@@ -17,12 +17,15 @@ export async function adminExists(): Promise<boolean> {
       .eq("role", "admin");
 
     if (error) {
-      if (error.code === "PGRST205") return false;
-      return false;
+      // Fail CLOSED: if we can't verify, assume admin exists.
+      // This prevents the setup page from opening during DB outages.
+      console.error("[adminExists] DB error — assuming admin exists for safety:", error.message);
+      return true;
     }
     return (count ?? 0) > 0;
   } catch {
-    return false;
+    // Fail CLOSED on any unexpected error
+    return true;
   }
 }
 
@@ -37,10 +40,23 @@ export async function createUser(data: CreateUserInput): Promise<ActionResult> {
   return createUserWithAdminClient(parsed.data);
 }
 
-export async function createFirstAdmin(data: CreateUserInput): Promise<ActionResult> {
+export async function createFirstAdmin(
+  data: CreateUserInput,
+  setupToken?: string | null
+): Promise<ActionResult> {
   const hasAdmin = await adminExists();
   if (hasAdmin) {
     return { success: false, error: "Setup already completed. Sign in instead." };
+  }
+
+  // Optional SETUP_TOKEN: when set, first admin creation requires the matching token.
+  // Prevents race where an attacker claims /setup before you do.
+  const expectedToken = process.env.SETUP_TOKEN?.trim();
+  if (expectedToken) {
+    const provided = (setupToken ?? "").trim();
+    if (!provided || provided !== expectedToken) {
+      return { success: false, error: "Invalid setup token. Check SETUP_TOKEN in env." };
+    }
   }
 
   if (data.role !== "admin") {

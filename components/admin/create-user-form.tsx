@@ -44,7 +44,9 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
       };
 
       const result =
-        mode === "setup" ? await createFirstAdmin(payload) : await createUser(payload);
+        mode === "setup"
+          ? await createFirstAdmin(payload, formData.get("setup_token") as string | null)
+          : await createUser(payload);
 
       if (!result.success) {
         toast.error(result.error);
@@ -94,6 +96,18 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
               placeholder="Min 6 characters"
             />
           </div>
+          {mode === "setup" && (
+            <div className="space-y-2">
+              <Label htmlFor="setup_token">Setup token (if configured)</Label>
+              <Input
+                id="setup_token"
+                name="setup_token"
+                type="password"
+                autoComplete="off"
+                placeholder="Required when SETUP_TOKEN is set in env"
+              />
+            </div>
+          )}
           {mode === "admin" && (
             <>
               <div className="space-y-2">

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { Toaster } from "sonner";
 
 export function ResponsiveToaster() {
+  const { resolvedTheme } = useTheme();
   const [position, setPosition] = useState<"top-center" | "top-right">("top-right");
 
   useEffect(() => {
@@ -14,5 +16,11 @@ export function ResponsiveToaster() {
     return () => media.removeEventListener("change", update);
   }, []);
 
-  return <Toaster richColors position={position} />;
+  return (
+    <Toaster
+      richColors
+      position={position}
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
+    />
+  );
 }

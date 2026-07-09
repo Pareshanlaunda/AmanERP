@@ -43,6 +43,13 @@ const MIGRATION_FILES = [
   "supabase/migration-v12-clid-format.sql",
   "supabase/migration-v13-clid-global-sequence.sql",
   "supabase/migration-v14-employee-stats-indexes.sql",
+  "supabase/migration-v15-botbiz-whatsapp.sql",
+  "supabase/migration-v16-whatsapp-lead-ranges.sql",
+  "supabase/migration-v17-lead-language.sql",
+  "supabase/migration-v18-employee-stats-rpc.sql",
+  "supabase/migration-v19-webhook-idempotency.sql",
+  "supabase/migration-v20-security-hardening.sql",
+  "supabase/migration-v21-whatsapp-slot-answers.sql",
 ];
 
 function getDatabaseUrls() {

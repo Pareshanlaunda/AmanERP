@@ -15,7 +15,9 @@ export default async function EmployeeDashboardPage() {
     getNotifications(),
     supabase
       .from("leads")
-      .select("*")
+      .select(
+        "id, client_name, client_phone, client_alternate_phone, client_email, notes, status, source, preferred_language, assigned_at, assigned_to, onboarding_record_id"
+      )
       .eq("assigned_to", current.id)
       .neq("status", "converted")
       .neq("status", "lost")
@@ -23,7 +25,9 @@ export default async function EmployeeDashboardPage() {
       .limit(100),
     supabase
       .from("client_onboardings")
-      .select("*")
+      .select(
+        "id, client_id, client_name, client_email, client_contact_number, loan_amount, advocate_name, created_at, submitted_by, lead_id"
+      )
       .eq("submitted_by", current.id)
       .order("created_at", { ascending: false })
       .limit(100),

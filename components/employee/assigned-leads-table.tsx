@@ -7,6 +7,7 @@ import { markLeadInProgress } from "@/lib/actions/leads";
 import type { Lead, LeadStatus } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { LanguageBadge } from "@/components/shared/language-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -65,6 +66,7 @@ export function AssignedLeadsTable({
               <TableHead>Client</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Lang</TableHead>
               <TableHead>Assigned</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -77,12 +79,20 @@ export function AssignedLeadsTable({
                 <TableCell>
                   <StatusBadge status={lead.status} />
                 </TableCell>
+                <TableCell>
+                  <LanguageBadge language={lead.preferred_language} />
+                </TableCell>
                 <TableCell>{formatDate(lead.assigned_at)}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/employee/leads/${lead.id}`}>Open</Link>
                     </Button>
+                    {lead.source === "whatsapp" && (
+                      <Button variant="secondary" size="sm" asChild>
+                        <Link href={`/employee/leads/${lead.id}#whatsapp-chat`}>Chat</Link>
+                      </Button>
+                    )}
                     {lead.status === "assigned" && (
                       <Button
                         size="sm"
@@ -120,13 +130,19 @@ export function AssignedLeadsTable({
               </div>
               <StatusBadge status={lead.status} />
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Assigned: {formatDate(lead.assigned_at)}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>Assigned: {formatDate(lead.assigned_at)}</span>
+              <LanguageBadge language={lead.preferred_language} />
+            </div>
             <div className="data-card-actions">
               <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
                 <Link href={`/employee/leads/${lead.id}`}>Open</Link>
               </Button>
+              {lead.source === "whatsapp" && (
+                <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
+                  <Link href={`/employee/leads/${lead.id}#whatsapp-chat`}>Chat</Link>
+                </Button>
+              )}
               {lead.status === "assigned" && (
                 <Button
                   size="sm"

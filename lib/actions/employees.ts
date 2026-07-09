@@ -10,52 +10,44 @@ import type { ClientOnboarding } from "@/lib/validations/onboarding";
 
 const EMPLOYEE_DETAIL_LIST_LIMIT = 100;
 
-type LeadStatusRow = { assigned_to: string | null; status: string };
-type ClientCountRow = { submitted_by: string | null };
 
-function buildLeadStatsByEmployee(rows: LeadStatusRow[]) {
-  const map = new Map<
+
+async function fetchAggregatedEmployeeStats(admin: ReturnType<typeof createAdminClient>) {
+  const [{ data: leadRows }, { data: clientRows }] = await Promise.all([
+    admin.rpc("get_employee_lead_stats"),
+    admin.rpc("get_employee_client_counts"),
+  ]);
+
+  const leadStats = new Map<
     string,
     { assigned: number; in_progress: number; converted: number; total: number }
   >();
 
-  for (const row of rows) {
-    if (!row.assigned_to) continue;
-    const entry = map.get(row.assigned_to) ?? {
-      assigned: 0,
-      in_progress: 0,
-      converted: 0,
-      total: 0,
-    };
-    entry.total += 1;
-    if (row.status === "assigned") entry.assigned += 1;
-    if (row.status === "in_progress") entry.in_progress += 1;
-    if (row.status === "converted") entry.converted += 1;
-    map.set(row.assigned_to, entry);
+  type RpcLeadRow = { employee_id: string | null; status: string; count: string | number };
+  for (const row of (leadRows ?? []) as RpcLeadRow[]) {
+    const empId = row.employee_id;
+    if (!empId) continue;
+
+    const entry = leadStats.get(empId) ?? { assigned: 0, in_progress: 0, converted: 0, total: 0 };
+    const count = Number(row.count) || 0;
+
+    entry.total += count;
+    if (row.status === "assigned") entry.assigned += count;
+    if (row.status === "in_progress") entry.in_progress += count;
+    if (row.status === "converted") entry.converted += count;
+
+    leadStats.set(empId, entry);
   }
 
-  return map;
-}
-
-function buildClientCountsByEmployee(rows: ClientCountRow[]) {
-  const map = new Map<string, number>();
-  for (const row of rows) {
-    if (!row.submitted_by) continue;
-    map.set(row.submitted_by, (map.get(row.submitted_by) ?? 0) + 1);
+  const clientCounts = new Map<string, number>();
+  type RpcClientRow = { employee_id: string | null; count: string | number };
+  for (const row of (clientRows ?? []) as RpcClientRow[]) {
+    if (row.employee_id) {
+      clientCounts.set(row.employee_id, Number(row.count) || 0);
+    }
   }
-  return map;
-}
 
-async function fetchAggregatedEmployeeStats(admin: ReturnType<typeof createAdminClient>) {
-  const [{ data: leadRows }, { data: clientRows }] = await Promise.all([
-    admin.from("leads").select("assigned_to, status"),
-    admin.from("client_onboardings").select("submitted_by"),
-  ]);
-
-  return {
-    leadStats: buildLeadStatsByEmployee((leadRows ?? []) as LeadStatusRow[]),
-    clientCounts: buildClientCountsByEmployee((clientRows ?? []) as ClientCountRow[]),
-  };
+  return { leadStats, clientCounts };
 }
 
 async function buildEmployeeStatsList(): Promise<EmployeeStats[]> {

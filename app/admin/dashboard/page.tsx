@@ -18,7 +18,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("leads")
       .select(
-        "id, client_name, client_phone, status, assigned_to, created_at, assigned_at, updated_at"
+        "id, client_name, client_phone, source, status, assigned_to, created_at, assigned_at, updated_at"
       )
       .order("created_at", { ascending: false })
       .limit(50),

@@ -15,7 +15,10 @@ import {
   type OnboardingFormValues,
 } from "@/lib/validations/onboarding";
 import { LOAN_TYPE_OPTIONS } from "@/lib/validations/leads";
+import type { HarassmentAnswer, HarassmentType } from "@/lib/validations/harassment";
+import type { LoanType, Lead } from "@/lib/types/database";
 import { HarassmentFacedFieldGroup } from "@/components/onboarding/harassment-faced-field-group";
+import { WhatsAppLeadCapturedBanner } from "@/components/onboarding/whatsapp-lead-captured-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,20 +34,32 @@ import {
 
 type OnboardingFormProps = {
   leadId?: string;
+  lead?: Lead | null;
+  fromWhatsApp?: boolean;
   defaultAdvocateEmail?: string;
   defaultAdvocateName?: string;
   defaultClientName?: string;
   defaultClientEmail?: string;
   defaultClientPhone?: string;
+  defaultLoanType?: LoanType;
+  defaultHarassmentAnswer?: HarassmentAnswer;
+  defaultHarassmentType?: HarassmentType;
+  whatsappPersonalLoanRange?: string | null;
 };
 
 export function OnboardingForm({
   leadId,
+  lead,
+  fromWhatsApp = false,
   defaultAdvocateEmail = "",
   defaultAdvocateName = "",
   defaultClientName = "",
   defaultClientEmail = "",
   defaultClientPhone = "",
+  defaultLoanType,
+  defaultHarassmentAnswer,
+  defaultHarassmentType,
+  whatsappPersonalLoanRange,
 }: OnboardingFormProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -57,12 +72,16 @@ export function OnboardingForm({
     formState: { errors },
   } = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingFormSchema),
+    shouldUnregister: false,
     defaultValues: {
       client_name: defaultClientName,
       client_email: defaultClientEmail,
       client_contact_number: defaultClientPhone,
       advocate_email: defaultAdvocateEmail,
       advocate_name: defaultAdvocateName,
+      loan_type: defaultLoanType,
+      harassment_answer: defaultHarassmentAnswer,
+      harassment_type: defaultHarassmentType,
     },
   });
 
@@ -88,16 +107,29 @@ export function OnboardingForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-      <FormSection title="Client Details" description="Basic information about the client">
-        <FormField label="Client's Name *" error={errors.client_name?.message}>
-          <Input {...register("client_name")} placeholder="Full name" />
-        </FormField>
-        <FormField label="Client's Email" error={errors.client_email?.message}>
-          <Input {...register("client_email")} type="email" placeholder="client@email.com" />
-        </FormField>
-        <FormField label="Client's Contact Number" error={errors.client_contact_number?.message}>
-          <Input {...register("client_contact_number")} type="tel" placeholder="+91..." />
-        </FormField>
+      {fromWhatsApp && lead && <WhatsAppLeadCapturedBanner lead={lead} />}
+
+      <FormSection
+        title="Client Details"
+        description={
+          fromWhatsApp
+            ? "Name and phone came from WhatsApp — add occupation and household details from your call."
+            : "Basic information about the client"
+        }
+      >
+        {!fromWhatsApp && (
+          <>
+            <FormField label="Client's Name *" error={errors.client_name?.message}>
+              <Input {...register("client_name")} placeholder="Full name" />
+            </FormField>
+            <FormField label="Client's Email" error={errors.client_email?.message}>
+              <Input {...register("client_email")} type="email" placeholder="client@email.com" />
+            </FormField>
+            <FormField label="Client's Contact Number" error={errors.client_contact_number?.message}>
+              <Input {...register("client_contact_number")} type="tel" placeholder="+91..." />
+            </FormField>
+          </>
+        )}
         <FormField label="Parent/Alternate Phone Number" error={errors.parent_alternate_phone?.message}>
           <Input {...register("parent_alternate_phone")} type="tel" placeholder="+91..." />
         </FormField>
@@ -127,24 +159,45 @@ export function OnboardingForm({
         />
       </FormSection>
 
-      <FormSection title="Financial Details" description="Loan and income information">
-        <RadioFieldGroup
-          control={control}
-          name="loan_type"
-          label="Loan type"
-          options={LOAN_TYPE_OPTIONS}
-          error={errors.loan_type?.message}
-          fullWidth
-        />
-        <HarassmentFacedFieldGroup
-          control={control}
-          answerName="harassment_answer"
-          typeName="harassment_type"
-          answerError={errors.harassment_answer?.message}
-          typeError={errors.harassment_type?.message}
-        />
-        <FormField label="Loan Amount" error={errors.loan_amount?.message}>
-          <Input {...register("loan_amount")} type="number" min="0" step="0.01" placeholder="0" />
+      <FormSection
+        title="Financial Details"
+        description={
+          fromWhatsApp
+            ? "Confirm exact loan amount and add income details (WhatsApp ranges already saved on the lead)."
+            : "Loan and income information"
+        }
+      >
+        {!fromWhatsApp && (
+          <RadioFieldGroup
+            control={control}
+            name="loan_type"
+            label="Loan type"
+            options={LOAN_TYPE_OPTIONS}
+            error={errors.loan_type?.message}
+            fullWidth
+          />
+        )}
+        {!fromWhatsApp && (
+          <HarassmentFacedFieldGroup
+            control={control}
+            answerName="harassment_answer"
+            typeName="harassment_type"
+            answerError={errors.harassment_answer?.message}
+            typeError={errors.harassment_type?.message}
+          />
+        )}
+        <FormField label="Exact loan amount (₹)" error={errors.loan_amount?.message}>
+          <Input
+            {...register("loan_amount")}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder={
+              whatsappPersonalLoanRange
+                ? `WhatsApp range: ${whatsappPersonalLoanRange} — enter exact figure`
+                : "Enter confirmed amount"
+            }
+          />
         </FormField>
         <FormField label="Number of Lenders" error={errors.number_of_lenders?.message}>
           <Input {...register("number_of_lenders")} type="number" min="0" step="1" placeholder="0" />

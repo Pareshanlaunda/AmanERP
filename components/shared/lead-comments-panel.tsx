@@ -111,11 +111,11 @@ export function LeadCommentsPanel({
           <span className="relative">
             <MessageSquare className="h-4 w-4" />
             {hasUnread && (
-              <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-card" />
+              <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />
             )}
           </span>
           Discussion
-          {hasUnread && <span className="text-xs font-normal text-red-600">New</span>}
+          {hasUnread && <span className="text-xs font-normal text-destructive">New</span>}
         </h2>
       </div>
       {open && (

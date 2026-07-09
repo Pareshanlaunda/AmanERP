@@ -92,6 +92,7 @@ export function EmployeeDashboardContent({ userId, leads, clients }: EmployeeDas
         <ClientsTable
           clients={filteredClients}
           showClientId
+          viewLinkPrefix="/employee/clients"
           emptyMessage={
             liveClients.length > 0 && filteredClients.length === 0
               ? "No clients match your search."

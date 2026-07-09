@@ -39,6 +39,7 @@ export function ClientsTable({
   }, [clients, query, showSearch]);
 
   const list = showSearch ? filtered : clients;
+  const showActions = Boolean(viewLinkPrefix);
 
   return (
     <div className="space-y-4">
@@ -70,7 +71,7 @@ export function ClientsTable({
                   <TableHead>Loan Amount</TableHead>
                   <TableHead>Advocate</TableHead>
                   <TableHead>Submitted</TableHead>
-                  {viewLinkPrefix ? <TableHead></TableHead> : null}
+                  {showActions ? <TableHead></TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -87,11 +88,20 @@ export function ClientsTable({
                     <TableCell>{formatCurrency(client.loan_amount)}</TableCell>
                     <TableCell>{client.advocate_name}</TableCell>
                     <TableCell>{formatDate(client.created_at)}</TableCell>
-                    {viewLinkPrefix ? (
+                    {showActions ? (
                       <TableCell>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`${viewLinkPrefix}/${client.id}`}>View</Link>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`${viewLinkPrefix}/${client.id}`}>View</Link>
+                          </Button>
+                          {client.lead_id ? (
+                            <Button variant="secondary" size="sm" asChild>
+                              <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>
+                                Chat
+                              </Link>
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     ) : null}
                   </TableRow>
@@ -112,11 +122,16 @@ export function ClientsTable({
                   <p>Advocate: {client.advocate_name}</p>
                   <p>Submitted: {formatDate(client.created_at)}</p>
                 </div>
-                {viewLinkPrefix ? (
+                {showActions ? (
                   <div className="data-card-actions">
                     <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
                       <Link href={`${viewLinkPrefix}/${client.id}`}>View full record</Link>
                     </Button>
+                    {client.lead_id ? (
+                      <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
+                        <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>Chat</Link>
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ui/responsive-toaster";
 import "./globals.css";
 
@@ -38,10 +39,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${display.variable} ${body.variable} ${mono.variable} font-sans antialiased`}>
-        {children}
-        <ResponsiveToaster />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <ResponsiveToaster />
+        </ThemeProvider>
       </body>
     </html>
   );

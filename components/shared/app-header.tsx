@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 import type { Notification } from "@/lib/types/database";
 import { NotificationBell } from "@/components/shared/notification-bell";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 type AppHeaderProps = {
@@ -36,6 +37,7 @@ export function AppHeader({
         </div>
         <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
           {actions}
+          <ThemeToggle />
           {showNotifications && (
             <NotificationBell
               userId={userId}

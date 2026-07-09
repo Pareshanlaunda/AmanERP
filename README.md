@@ -141,10 +141,26 @@ After changing env vars on Vercel, click **Redeploy** on the latest deployment.
 
 ## Lead workflow
 
-1. Admin creates lead (or future WhatsApp webhook)
+1. Admin creates lead (or WhatsApp webhook from Botbiz)
 2. Admin assigns employee
 3. Employee starts progress → onboarding form → mark successful
 4. Admin notified; full onboarding visible on lead **View**
+
+## Hosting (free → scale)
+
+| Piece | Where | Notes |
+|-------|--------|------|
+| App + webhook API | **Vercel** (Hobby free → Pro when limits hit) | Built for Next.js |
+| Database + Auth + RLS | **Supabase** (Free → Pro for backups/size) | Not on Vercel |
+| Domain / email | **Hostinger** (optional) | Point DNS at Vercel — do **not** run Next.js on Hostinger shared hosting |
+
+**Phase 0 (now):** Vercel Hobby + Supabase Free + `BOTBIZ_WEBHOOK_SECRET` on Vercel.
+
+**Phase 1:** Vercel Pro / Supabase Pro when you need backups or higher traffic.
+
+**Phase 2:** Webhook queue, Upstash rate limits, Sentry, Cloudflare WAF when volume grows.
+
+Optional first-admin lock: set `SETUP_TOKEN` in env before anyone hits `/setup`.
 
 ## CLI scripts (local only)
 

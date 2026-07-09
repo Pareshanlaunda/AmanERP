@@ -133,7 +133,7 @@ export function NotificationBell({
       >
         <Bell className="h-[18px] w-[18px]" />
         {unread.length > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-semibold leading-none text-destructive-foreground">
             {unread.length > 9 ? "9+" : unread.length}
           </span>
         )}
@@ -142,7 +142,7 @@ export function NotificationBell({
       {open && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/20 sm:hidden"
+            className="fixed inset-0 z-40 bg-foreground/20 sm:hidden"
             aria-hidden
             onClick={() => setOpen(false)}
           />

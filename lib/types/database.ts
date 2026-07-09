@@ -10,13 +10,15 @@ export type LeadStatus =
   | "converted"
   | "lost";
 
-export type LoanType = "personal_business" | "credit_card" | "both";
+export type LoanType = "secured" | "unsecured" | "both";
 
 export type HarassmentFaced =
   | "no"
   | "yes_calls"
   | "yes_home_visit"
   | "yes_calls_home_visit";
+
+export type PreferredLanguage = "en" | "hi" | "mr";
 
 export type OutcomeCategory = "active" | "drop" | "reschedule" | "successful";
 
@@ -40,11 +42,22 @@ export type Lead = {
   client_alternate_phone: string | null;
   client_email: string | null;
   loan_amount: number | null;
+  personal_loan_amount_range: string | null;
+  credit_card_amount_range: string | null;
   loan_type: LoanType | null;
   harassment_faced: HarassmentFaced | null;
   notes: string | null;
   source: string;
   status: LeadStatus;
+  preferred_language: PreferredLanguage;
+  botbiz_subscriber_id?: string | null;
+  whatsapp_metadata?: Record<string, unknown> | null;
+  whatsapp_slot_answers?: Array<{
+    slot: string;
+    kind: "button" | "text" | "media";
+    raw: string;
+    canonical?: string | null;
+  }> | null;
   assigned_to: string | null;
   assigned_at: string | null;
   assignment_comment: string | null;
@@ -107,16 +120,16 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
 };
 
 export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
-  personal_business: "Personal Loan / Business Loan",
-  credit_card: "Credit Card",
+  secured: "Secured Loans",
+  unsecured: "Unsecured Loans",
   both: "Both",
 };
 
 export const HARASSMENT_FACED_LABELS: Record<HarassmentFaced, string> = {
-  no: "No",
-  yes_calls: "Yes — Calls",
-  yes_home_visit: "Yes — Home Visit",
-  yes_calls_home_visit: "Yes — Calls & Home Visit",
+  no: "No Harassment",
+  yes_calls: "Recovery Calls",
+  yes_home_visit: "Home Visits",
+  yes_calls_home_visit: "Both",
 };
 
 export const EMPLOYEE_TYPE_LABELS: Record<EmployeeType, string> = {
@@ -133,4 +146,25 @@ export const OUTCOME_CATEGORY_LABELS: Record<OutcomeCategory, string> = {
   drop: "Drop",
   reschedule: "Reschedule",
   successful: "Successful",
+};
+
+export const LEAD_SOURCE_LABELS: Record<string, string> = {
+  manual: "Manual",
+  whatsapp: "WhatsApp",
+};
+
+export function getLeadSourceLabel(source: string): string {
+  return LEAD_SOURCE_LABELS[source] ?? source;
+}
+
+export const PREFERRED_LANGUAGE_LABELS: Record<PreferredLanguage, string> = {
+  en: "English",
+  hi: "Hindi — हिन्दी",
+  mr: "Marathi — मराठी",
+};
+
+export const PREFERRED_LANGUAGE_SHORT: Record<PreferredLanguage, string> = {
+  en: "EN",
+  hi: "हि",
+  mr: "मर",
 };
