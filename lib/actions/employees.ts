@@ -7,6 +7,7 @@ import { listAllAuthUsers } from "@/lib/queries/auth-users";
 import { getEmployeeProfilesFromDb } from "@/lib/queries/profiles";
 import type { EmployeeStats, Lead, Profile } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
+import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
 
 const EMPLOYEE_DETAIL_LIST_LIMIT = 100;
 
@@ -69,6 +70,7 @@ async function buildEmployeeStatsList(): Promise<EmployeeStats[]> {
 
     return {
       id: profile.id,
+      employee_code: profile.employee_code ?? null,
       full_name:
         profile.full_name ??
         authUser?.user_metadata?.full_name ??
@@ -76,6 +78,8 @@ async function buildEmployeeStatsList(): Promise<EmployeeStats[]> {
         "Employee",
       role: "employee",
       employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+      address: (profile as Profile).address ?? null,
+      mobile: (profile as Profile).mobile ?? null,
       created_at: profile.created_at ?? authUser?.created_at ?? new Date().toISOString(),
       email: emailById.get(profile.id),
       assigned_count: counts?.assigned ?? 0,
@@ -97,7 +101,7 @@ async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats 
   const [{ data: profile }, authUsers, { leadStats, clientCounts }] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, full_name, role, employee_type, created_at")
+      .select("id, employee_code, full_name, role, employee_type, address, mobile, created_at")
       .eq("id", employeeId)
       .maybeSingle(),
     listAllAuthUsers(),
@@ -111,6 +115,7 @@ async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats 
 
   return {
     id: profile.id,
+    employee_code: (profile.employee_code as string | null) ?? null,
     full_name:
       profile.full_name ??
       authUser?.user_metadata?.full_name ??
@@ -118,6 +123,8 @@ async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats 
       "Employee",
     role: "employee",
     employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+    address: (profile.address as string | null) ?? null,
+    mobile: (profile.mobile as string | null) ?? null,
     created_at: profile.created_at ?? authUser?.created_at ?? new Date().toISOString(),
     email: authUser?.email ?? undefined,
     assigned_count: counts?.assigned ?? 0,
@@ -144,6 +151,7 @@ export async function getEmployeeProfilesForAdmin(): Promise<(Profile & { email?
 
   return employeeProfiles.map((profile) => ({
     id: profile.id,
+    employee_code: profile.employee_code ?? null,
     full_name:
       profile.full_name ??
       authMetaById.get(profile.id)?.user_metadata?.full_name ??
@@ -151,6 +159,8 @@ export async function getEmployeeProfilesForAdmin(): Promise<(Profile & { email?
       "Employee",
     role: "employee" as const,
     employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
+    address: profile.address ?? null,
+    mobile: profile.mobile ?? null,
     created_at: profile.created_at,
     email: emailById.get(profile.id),
   }));
@@ -170,13 +180,17 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
   const employee = await getEmployeeStatsForId(employeeId);
   if (!employee) notFound();
 
-  const [{ data: leads }, { data: clients }] = await Promise.all([
+  const [{ data: primaryLeads }, { data: additionalLinks }, { data: clients }] = await Promise.all([
     admin
       .from("leads")
       .select("*")
       .eq("assigned_to", employeeId)
       .order("assigned_at", { ascending: false })
       .limit(EMPLOYEE_DETAIL_LIST_LIMIT),
+    admin
+      .from("lead_additional_assignees")
+      .select("lead_id")
+      .eq("employee_id", employeeId),
     admin
       .from("client_onboardings")
       .select("*")
@@ -185,7 +199,31 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
       .limit(EMPLOYEE_DETAIL_LIST_LIMIT),
   ]);
 
-  const allLeads = (leads ?? []) as Lead[];
+  const primary = (primaryLeads ?? []) as Lead[];
+  const extraIds = (additionalLinks ?? [])
+    .map((row) => row.lead_id as string)
+    .filter((id) => !primary.some((l) => l.id === id));
+
+  let additional: Lead[] = [];
+  if (extraIds.length > 0) {
+    const { data } = await admin
+      .from("leads")
+      .select("*")
+      .in("id", extraIds)
+      .order("assigned_at", { ascending: false })
+      .limit(EMPLOYEE_DETAIL_LIST_LIMIT);
+    additional = (data ?? []) as Lead[];
+  }
+
+  const merged = [...primary, ...additional];
+  const assigneeMap = await listAdditionalAssigneeIdsForLeads(
+    admin,
+    merged.map((l) => l.id)
+  );
+  const allLeads = merged.map((lead) => ({
+    ...lead,
+    additional_assignee_ids: assigneeMap.get(lead.id) ?? [],
+  }));
   const activeLeads = allLeads.filter((l) => l.status !== "lost");
   const lostLeads = allLeads.filter((l) => l.status === "lost");
 

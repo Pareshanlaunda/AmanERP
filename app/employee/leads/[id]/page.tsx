@@ -10,6 +10,7 @@ import { AppHeader } from "@/components/shared/app-header";
 import { EmployeeLeadDetailLive } from "@/components/employee/employee-lead-detail-live";
 import { Button } from "@/components/ui/button";
 import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
+import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 
 export default async function EmployeeLeadDetailPage({
   params,
@@ -20,16 +21,17 @@ export default async function EmployeeLeadDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: lead } = await supabase
-    .from("leads")
-    .select("*")
-    .eq("id", id)
-    .eq("assigned_to", current.id)
-    .single();
+  const { data: lead } = await supabase.from("leads").select("*").eq("id", id).single();
 
   if (!lead) notFound();
 
   const typedLead = lead as Lead;
+  const additionalIds = await listAdditionalAssigneeIds(supabase, id);
+  typedLead.additional_assignee_ids = additionalIds;
+
+  const isPrimary = typedLead.assigned_to === current.id;
+  const isAdditional = additionalIds.includes(current.id);
+  if (!isPrimary && !isAdditional) notFound();
 
   const [updatesResult, comments, unread, authorNames, notifications, onboardingResult] =
     await Promise.all([
@@ -51,32 +53,31 @@ export default async function EmployeeLeadDetailPage({
         : Promise.resolve({ data: null }),
     ]);
 
-  const clientId = onboardingResult.data?.client_id ?? null;
-
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
         title={typedLead.client_name}
-        subtitle="Lead progress and onboarding"
+        subtitle="Assigned lead"
         userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/employee/leads"
       />
-      <main className="page-container-narrow">
-        <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4 sm:mb-6">
+      <main className="page-container-narrow space-y-6">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/employee/dashboard">
             <ArrowLeft className="h-4 w-4" />
             Back to dashboard
           </Link>
         </Button>
+
         <EmployeeLeadDetailLive
-          currentUserId={current.id}
           lead={typedLead}
-          updates={(updatesResult.data ?? []) as LeadUpdate[]}
+          currentUserId={current.id}
           comments={comments}
           hasUnreadComments={unread}
           authorNames={authorNames}
-          clientId={clientId}
+          updates={(updatesResult.data ?? []) as LeadUpdate[]}
+          clientId={onboardingResult.data?.client_id ?? null}
         />
       </main>
     </div>

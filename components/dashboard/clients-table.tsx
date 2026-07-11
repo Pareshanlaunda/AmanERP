@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ClidBadge } from "@/components/shared/clid-badge";
+import { NoticeSelectButton } from "@/components/shared/notice-select-button";
 import { SearchBar } from "@/components/dashboard/search-bar";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { filterClients } from "@/lib/filters/list-search";
+
+/** Stable default — inline `= {}` is a new object every render and loops useEffect. */
+const EMPTY_NOTICE_IDS: Record<string, string> = Object.freeze({});
 
 type ClientsTableProps = {
   clients: ClientOnboarding[];
@@ -23,6 +27,9 @@ type ClientsTableProps = {
   showSearch?: boolean;
   viewLinkPrefix?: string;
   emptyMessage?: string;
+  /** Show Notice / Select column (admin + employee client lists). */
+  showNotice?: boolean;
+  latestNoticeIds?: Record<string, string>;
 };
 
 export function ClientsTable({
@@ -31,8 +38,17 @@ export function ClientsTable({
   showSearch = false,
   viewLinkPrefix,
   emptyMessage,
+  showNotice = true,
+  latestNoticeIds,
 }: ClientsTableProps) {
+  const noticeSource = latestNoticeIds ?? EMPTY_NOTICE_IDS;
   const [query, setQuery] = useState("");
+  const [noticeIds, setNoticeIds] = useState(noticeSource);
+
+  useEffect(() => {
+    setNoticeIds(noticeSource);
+  }, [noticeSource]);
+
   const filtered = useMemo(() => {
     if (!showSearch) return clients;
     return filterClients(clients, query);
@@ -71,6 +87,7 @@ export function ClientsTable({
                   <TableHead>Loan Amount</TableHead>
                   <TableHead>Advocate</TableHead>
                   <TableHead>Submitted</TableHead>
+                  {showNotice ? <TableHead>Notice</TableHead> : null}
                   {showActions ? <TableHead></TableHead> : null}
                 </TableRow>
               </TableHeader>
@@ -88,6 +105,17 @@ export function ClientsTable({
                     <TableCell>{formatCurrency(client.loan_amount)}</TableCell>
                     <TableCell>{client.advocate_name}</TableCell>
                     <TableCell>{formatDate(client.created_at)}</TableCell>
+                    {showNotice ? (
+                      <TableCell>
+                        <NoticeSelectButton
+                          client={client}
+                          latestNoticeId={noticeIds[client.id] ?? null}
+                          onNoticeSaved={(id) =>
+                            setNoticeIds((prev) => ({ ...prev, [client.id]: id }))
+                          }
+                        />
+                      </TableCell>
+                    ) : null}
                     {showActions ? (
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
@@ -122,15 +150,28 @@ export function ClientsTable({
                   <p>Advocate: {client.advocate_name}</p>
                   <p>Submitted: {formatDate(client.created_at)}</p>
                 </div>
-                {showActions ? (
+                {showNotice || showActions ? (
                   <div className="data-card-actions">
-                    <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-                      <Link href={`${viewLinkPrefix}/${client.id}`}>View full record</Link>
-                    </Button>
-                    {client.lead_id ? (
-                      <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
-                        <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>Chat</Link>
-                      </Button>
+                    {showNotice ? (
+                      <NoticeSelectButton
+                        client={client}
+                        latestNoticeId={noticeIds[client.id] ?? null}
+                        onNoticeSaved={(id) =>
+                          setNoticeIds((prev) => ({ ...prev, [client.id]: id }))
+                        }
+                      />
+                    ) : null}
+                    {showActions ? (
+                      <>
+                        <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
+                          <Link href={`${viewLinkPrefix}/${client.id}`}>View full record</Link>
+                        </Button>
+                        {client.lead_id ? (
+                          <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
+                            <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>Chat</Link>
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 ) : null}

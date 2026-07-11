@@ -1,19 +1,26 @@
 import { z } from "zod";
 import { employeeTypeSchema } from "@/lib/validations/leads";
 
+const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .refine(
+    (val) => /[a-zA-Z]/.test(val) && /[0-9]/.test(val),
+    "Password must contain at least one letter and one number"
+  );
+
 export const createUserSchema = z
   .object({
     email: z.string().email("Valid email is required"),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .refine(
-        (val) => /[a-zA-Z]/.test(val) && /[0-9]/.test(val),
-        "Password must contain at least one letter and one number"
-      ),
+    password: passwordSchema,
     full_name: z.string().min(1, "Name is required"),
     role: z.enum(["admin", "employee"]),
     employee_type: employeeTypeSchema.optional(),
+    address: z.string().min(1, "Address is required"),
+    mobile: z
+      .string()
+      .min(8, "Mobile number is required")
+      .regex(/^[+\d][\d\s-]{7,18}$/, "Enter a valid mobile number"),
   })
   .superRefine((data, ctx) => {
     if (data.role === "employee" && !data.employee_type) {
@@ -26,6 +33,14 @@ export const createUserSchema = z
   });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+/** Admin sets a new password directly — no old password / email link. */
+export const adminResetPasswordSchema = z.object({
+  user_id: z.string().uuid("Invalid user"),
+  password: passwordSchema,
+});
+
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
 
 export const EMPLOYEE_TYPE_FORM_OPTIONS = [
   { value: "advocate", label: "Advocate" },

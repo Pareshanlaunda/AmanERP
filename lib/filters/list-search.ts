@@ -34,6 +34,7 @@ export function filterEmployees(employees: EmployeeStats[], query: string) {
     const typeLabel = EMPLOYEE_TYPE_LABELS[employee.employee_type ?? "general"];
     return (
       matchesField(employee.full_name, q) ||
+      matchesField(employee.employee_code, q) ||
       matchesField(employee.email, q) ||
       matchesField(typeLabel, q)
     );
@@ -52,4 +53,31 @@ export function filterClients(clients: ClientOnboarding[], query: string) {
       matchesField(client.client_contact_number, q) ||
       matchesField(client.advocate_name, q)
   );
+}
+
+type UserSearchFields = {
+  full_name?: string | null;
+  email?: string | null;
+  employee_code?: string | null;
+  role?: string | null;
+  employee_type?: string | null;
+};
+
+export function filterUsers<T extends UserSearchFields>(users: T[], query: string): T[] {
+  const q = normalizeQuery(query);
+  if (!q) return users;
+
+  return users.filter((user) => {
+    const typeLabel =
+      user.role === "employee"
+        ? EMPLOYEE_TYPE_LABELS[(user.employee_type as keyof typeof EMPLOYEE_TYPE_LABELS) ?? "general"]
+        : "";
+    return (
+      matchesField(user.full_name, q) ||
+      matchesField(user.email, q) ||
+      matchesField(user.employee_code, q) ||
+      matchesField(user.role, q) ||
+      matchesField(typeLabel, q)
+    );
+  });
 }

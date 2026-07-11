@@ -13,6 +13,7 @@ export function revalidateLeadMutation(leadId: string) {
 /** User/admin list pages still need SSR refresh after structural changes. */
 export function revalidateAdminLists() {
   revalidatePath("/admin/users");
+  revalidatePath("/admin/users/new");
   revalidatePath("/admin/dashboard");
 }
 
@@ -29,4 +30,21 @@ export function revalidateAfterLeadCreated(options?: { assigned?: boolean }) {
 
 export function revalidateEmployeeDetail(employeeId: string) {
   revalidatePath(`/admin/employees/${employeeId}`);
+}
+
+export function revalidateClientPages(clientId: string) {
+  revalidatePath(`/admin/clients/${clientId}`);
+  revalidatePath(`/employee/clients/${clientId}`);
+}
+
+export function revalidateClientMutation(
+  clientId: string,
+  options?: { previousOwnerId?: string | null; newOwnerId?: string | null; leadId?: string | null }
+) {
+  revalidateClientPages(clientId);
+  revalidatePath("/employee/dashboard");
+  revalidatePath("/admin/dashboard");
+  if (options?.previousOwnerId) revalidateEmployeeDetail(options.previousOwnerId);
+  if (options?.newOwnerId) revalidateEmployeeDetail(options.newOwnerId);
+  if (options?.leadId) revalidateLeadPages(options.leadId);
 }

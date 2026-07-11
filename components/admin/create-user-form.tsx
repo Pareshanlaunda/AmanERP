@@ -39,6 +39,8 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
         email: formData.get("email") as string,
         password: formData.get("password") as string,
         full_name: formData.get("full_name") as string,
+        address: formData.get("address") as string,
+        mobile: formData.get("mobile") as string,
         role: mode === "setup" ? ("admin" as const) : role,
         employee_type: mode === "setup" || role === "admin" ? undefined : employeeType,
       };
@@ -57,9 +59,7 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
       if (mode === "setup") {
         router.push("/login");
       } else {
-        form.reset();
-        setRole(defaultRole);
-        setEmployeeType("general");
+        router.push("/admin/users");
       }
     });
   }
@@ -85,6 +85,29 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" required placeholder="user@company.com" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mobile">
+              Mobile number<span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="mobile"
+              name="mobile"
+              type="tel"
+              required
+              placeholder="+91 98765 43210"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="address">
+              Office address<span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="address"
+              name="address"
+              required
+              placeholder="e.g. Delhi NCR Office: B-33, Sector-2, Noida, Uttar Pradesh"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>

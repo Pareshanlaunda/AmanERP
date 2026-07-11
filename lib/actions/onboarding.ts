@@ -10,6 +10,11 @@ import {
   type ClientOnboarding,
   type OnboardingFormValues,
 } from "@/lib/validations/onboarding";
+import {
+  listAdditionalAssigneeIds,
+  replaceAdditionalAssignees,
+} from "@/lib/leads/assignees";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type SubmitOnboardingResult =
   | { success: true }
@@ -43,7 +48,11 @@ export async function submitOnboarding(
       return { success: false, error: "Lead not found" };
     }
 
-    if (lead.assigned_to !== current.id) {
+    const isPrimary = lead.assigned_to === current.id;
+    const isAdditional =
+      !isPrimary && (await listAdditionalAssigneeIds(supabase, leadId)).includes(current.id);
+
+    if (!isPrimary && !isAdditional) {
       return { success: false, error: "This lead is not assigned to you" };
     }
 
@@ -81,6 +90,27 @@ export async function submitOnboarding(
 
     if (linkError) {
       return { success: false, error: linkError.message };
+    }
+
+    // Assign selected advocate as additional assignee on the lead (for notices / ownership)
+    try {
+      const admin = createAdminClient();
+      const { data: leadRow } = await admin
+        .from("leads")
+        .select("assigned_to")
+        .eq("id", leadId)
+        .single();
+      const existing = await listAdditionalAssigneeIds(admin, leadId);
+      const advocateId = parsed.data.advocate_id;
+      const primary = leadRow?.assigned_to as string | null;
+      const next = [...new Set([...existing, advocateId])].filter((id) => id !== primary);
+      await replaceAdditionalAssignees(admin, {
+        leadId,
+        employeeIds: next,
+        assignedBy: current.id,
+      });
+    } catch (e) {
+      console.error("[submitOnboarding] advocate assign failed", e);
     }
 
     await supabase.from("lead_updates").insert({

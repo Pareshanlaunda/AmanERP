@@ -84,7 +84,12 @@ export const onboardingFormSchema = z.object({
   parents_aware: z.enum(["yes", "no"]).optional(),
   early_drop_likelihood: z.enum(["low", "medium", "high"]).optional(),
   other_comments: z.string().optional(),
-  advocate_name: z.string().min(1, "Advocate/CSA name is required"),
+  /** Selected advocate employee profile id */
+  advocate_id: z
+    .string()
+    .min(1, "Select an advocate")
+    .uuid("Select an advocate"),
+  advocate_name: z.string().min(1, "Advocate name is required"),
   advocate_email: z.string().email("Valid advocate email is required"),
 }).superRefine((data, ctx) => {
   if (data.harassment_answer === "yes" && !data.harassment_type) {

@@ -26,7 +26,7 @@ export default async function AdminEmployeeDetailPage({
     <div className="min-h-screen bg-background">
       <AppHeader
         title={employee.full_name ?? "Employee"}
-        subtitle={employee.email ?? "Employee details"}
+        subtitle={[employee.employee_code, employee.email].filter(Boolean).join(" · ") || "Employee details"}
         userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"

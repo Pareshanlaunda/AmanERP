@@ -23,8 +23,11 @@ type AdminLeadDetailLiveProps = {
   updates: LeadUpdate[];
 };
 
-function AdminLeadInfoSection() {
+function AdminLeadInfoSection({ employees }: { employees: Profile[] }) {
   const { lead } = useLeadLive();
+  const employeeNames = Object.fromEntries(
+    employees.map((e) => [e.id, e.full_name ?? "Employee"])
+  );
 
   return (
     <section className="erp-panel overflow-hidden">
@@ -33,7 +36,7 @@ function AdminLeadInfoSection() {
         <LiveLeadStatus variant="badge" />
       </div>
       <div className="space-y-2 p-4 text-sm sm:p-6">
-        <LeadInfoFields lead={lead} />
+        <LeadInfoFields lead={lead} employeeNames={employeeNames} />
         <LiveLeadStatus variant="alerts" />
       </div>
     </section>
@@ -58,7 +61,7 @@ export function AdminLeadDetailLive(props: AdminLeadDetailLiveProps) {
 
   return (
     <LeadLiveProvider initialLead={lead}>
-      <AdminLeadInfoSection />
+      <AdminLeadInfoSection employees={employees} />
 
       <LiveLeadOnboardingSection initialOnboarding={onboarding} />
 

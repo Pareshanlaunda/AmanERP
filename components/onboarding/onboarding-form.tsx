@@ -16,9 +16,8 @@ import {
 } from "@/lib/validations/onboarding";
 import { LOAN_TYPE_OPTIONS } from "@/lib/validations/leads";
 import type { HarassmentAnswer, HarassmentType } from "@/lib/validations/harassment";
-import type { LoanType, Lead } from "@/lib/types/database";
+import type { LoanType } from "@/lib/types/database";
 import { HarassmentFacedFieldGroup } from "@/components/onboarding/harassment-faced-field-group";
-import { WhatsAppLeadCapturedBanner } from "@/components/onboarding/whatsapp-lead-captured-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,13 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { AdvocateOption } from "@/lib/actions/advocates";
 
 type OnboardingFormProps = {
   leadId?: string;
-  lead?: Lead | null;
-  fromWhatsApp?: boolean;
-  defaultAdvocateEmail?: string;
-  defaultAdvocateName?: string;
+  advocates?: AdvocateOption[];
   defaultClientName?: string;
   defaultClientEmail?: string;
   defaultClientPhone?: string;
@@ -49,10 +46,7 @@ type OnboardingFormProps = {
 
 export function OnboardingForm({
   leadId,
-  lead,
-  fromWhatsApp = false,
-  defaultAdvocateEmail = "",
-  defaultAdvocateName = "",
+  advocates = [],
   defaultClientName = "",
   defaultClientEmail = "",
   defaultClientPhone = "",
@@ -77,8 +71,9 @@ export function OnboardingForm({
       client_name: defaultClientName,
       client_email: defaultClientEmail,
       client_contact_number: defaultClientPhone,
-      advocate_email: defaultAdvocateEmail,
-      advocate_name: defaultAdvocateName,
+      advocate_id: "",
+      advocate_email: "",
+      advocate_name: "",
       loan_type: defaultLoanType,
       harassment_answer: defaultHarassmentAnswer,
       harassment_type: defaultHarassmentType,
@@ -107,29 +102,16 @@ export function OnboardingForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-      {fromWhatsApp && lead && <WhatsAppLeadCapturedBanner lead={lead} />}
-
-      <FormSection
-        title="Client Details"
-        description={
-          fromWhatsApp
-            ? "Name and phone came from WhatsApp — add occupation and household details from your call."
-            : "Basic information about the client"
-        }
-      >
-        {!fromWhatsApp && (
-          <>
-            <FormField label="Client's Name *" error={errors.client_name?.message}>
-              <Input {...register("client_name")} placeholder="Full name" />
-            </FormField>
-            <FormField label="Client's Email" error={errors.client_email?.message}>
-              <Input {...register("client_email")} type="email" placeholder="client@email.com" />
-            </FormField>
-            <FormField label="Client's Contact Number" error={errors.client_contact_number?.message}>
-              <Input {...register("client_contact_number")} type="tel" placeholder="+91..." />
-            </FormField>
-          </>
-        )}
+      <FormSection title="Client Details" description="Basic information about the client">
+        <FormField label="Client's Name *" error={errors.client_name?.message}>
+          <Input {...register("client_name")} placeholder="Full name" />
+        </FormField>
+        <FormField label="Client's Email" error={errors.client_email?.message}>
+          <Input {...register("client_email")} type="email" placeholder="client@email.com" />
+        </FormField>
+        <FormField label="Client's Contact Number" error={errors.client_contact_number?.message}>
+          <Input {...register("client_contact_number")} type="tel" placeholder="+91..." />
+        </FormField>
         <FormField label="Parent/Alternate Phone Number" error={errors.parent_alternate_phone?.message}>
           <Input {...register("parent_alternate_phone")} type="tel" placeholder="+91..." />
         </FormField>
@@ -159,33 +141,22 @@ export function OnboardingForm({
         />
       </FormSection>
 
-      <FormSection
-        title="Financial Details"
-        description={
-          fromWhatsApp
-            ? "Confirm exact loan amount and add income details (WhatsApp ranges already saved on the lead)."
-            : "Loan and income information"
-        }
-      >
-        {!fromWhatsApp && (
-          <RadioFieldGroup
-            control={control}
-            name="loan_type"
-            label="Loan type"
-            options={LOAN_TYPE_OPTIONS}
-            error={errors.loan_type?.message}
-            fullWidth
-          />
-        )}
-        {!fromWhatsApp && (
-          <HarassmentFacedFieldGroup
-            control={control}
-            answerName="harassment_answer"
-            typeName="harassment_type"
-            answerError={errors.harassment_answer?.message}
-            typeError={errors.harassment_type?.message}
-          />
-        )}
+      <FormSection title="Financial Details" description="Loan and income information">
+        <RadioFieldGroup
+          control={control}
+          name="loan_type"
+          label="Loan type"
+          options={LOAN_TYPE_OPTIONS}
+          error={errors.loan_type?.message}
+          fullWidth
+        />
+        <HarassmentFacedFieldGroup
+          control={control}
+          answerName="harassment_answer"
+          typeName="harassment_type"
+          answerError={errors.harassment_answer?.message}
+          typeError={errors.harassment_type?.message}
+        />
         <FormField label="Exact loan amount (₹)" error={errors.loan_amount?.message}>
           <Input
             {...register("loan_amount")}
@@ -314,13 +285,49 @@ export function OnboardingForm({
         </FormField>
       </FormSection>
 
-      <FormSection title="Advocate / CSA">
-        <FormField label="Advocate/CSA Name (Your Name) *" error={errors.advocate_name?.message}>
-          <Input {...register("advocate_name")} placeholder="Your name" />
+      <FormSection title="Advocate">
+        <FormField label="Advocate name *" error={errors.advocate_id?.message ?? errors.advocate_name?.message}>
+          <Controller
+            name="advocate_id"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value || undefined}
+                onValueChange={(id) => {
+                  field.onChange(id);
+                  const selected = advocates.find((a) => a.id === id);
+                  setValue("advocate_name", selected?.full_name ?? "", {
+                    shouldValidate: true,
+                  });
+                  setValue("advocate_email", selected?.email ?? "", {
+                    shouldValidate: true,
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select advocate" />
+                </SelectTrigger>
+                <SelectContent>
+                  {advocates.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </FormField>
-        <FormField label="Advocate/CSA Email (Your Official Email) *" error={errors.advocate_email?.message}>
-          <Input {...register("advocate_email")} type="email" placeholder="you@company.com" />
+        <FormField label="Advocate email *" error={errors.advocate_email?.message}>
+          <Input
+            {...register("advocate_email")}
+            type="email"
+            readOnly
+            className="bg-muted/40"
+            placeholder="Auto-filled from selected advocate"
+          />
         </FormField>
+        <input type="hidden" {...register("advocate_name")} />
       </FormSection>
 
       <div className="form-sticky-footer">

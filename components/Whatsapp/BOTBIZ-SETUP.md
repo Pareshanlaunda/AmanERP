@@ -88,11 +88,13 @@ https://aman-erp-theta.vercel.app/api/webhooks/botbiz?secret=YOUR_PRODUCTION_SEC
 
 | Toggle | ON/OFF | Why |
 |--------|--------|-----|
-| **POSTBACK** | OFF | Not needed for Client_Details completion |
-| **USER INPUT FLOW** | **ON** | Fires when Client_Details flow finishes |
+| **POSTBACK** | **ON** | First contact — language / start buttons create a lead **before** the form finishes |
+| **USER INPUT FLOW** | **ON** | Fires when Client_Details flow finishes — enriches the same lead |
 | **LOCATION** | OFF | Not used |
 
-Only **USER INPUT FLOW** should be ON.
+Both **POSTBACK** and **USER INPUT FLOW** should be ON.
+
+**Why POSTBACK?** Botbiz cannot push every free-text chat line. The earliest reliable event is usually the language button (English / Hindi / Marathi). That creates a stub lead (`WhatsApp 91…`) so agents can open chat and follow up while the customer is still filling the form. When Client_Details completes, the same lead is updated with name, loan fields, etc.
 
 ---
 
@@ -100,17 +102,17 @@ Only **USER INPUT FLOW** should be ON.
 
 | Toggle | ON/OFF | Why |
 |--------|--------|-----|
-| **SUBSCRIBER ID** | **ON** | Dedup + phone fallback |
+| **SUBSCRIBER ID** | **ON** | Dedup + phone fallback — **required for early leads** |
 | **SUBSCRIBER NAME** | **ON** | Backup if name field empty |
-| **PHONE NUMBER** | **ON** | Client mobile |
-| **INPUT FLOW DATA** | **ON** | **Most important** — contains Full Name, Loan_Type, Personal_Loan_Amount, Credit_Card_Amount, Recovery_Harassment |
+| **PHONE NUMBER** | **ON** | Client mobile — **required for early leads** |
+| **INPUT FLOW DATA** | **ON** | Full Name, Loan_Type, amounts, harassment (form completion) |
+| **POSTBACK ID** | **ON** | Helps detect language from the button the user tapped |
 | DATE OF BIRTH | OFF | Not in your flow |
 | LOCATION | OFF | Not in your flow |
 | LABELS | OFF | Optional later |
-| POSTBACK ID | OFF | Not needed |
 
-**Minimum required:** SUBSCRIBER ID + PHONE NUMBER + **INPUT FLOW DATA**  
-**Recommended:** also SUBSCRIBER NAME
+**Minimum for early contact:** SUBSCRIBER ID + PHONE NUMBER (+ POSTBACK action)  
+**For full form:** also INPUT FLOW DATA + SUBSCRIBER NAME
 
 > Your screen does **not** list Loan_Type separately — those live **inside INPUT FLOW DATA**. That is correct.
 
@@ -118,14 +120,25 @@ Only **USER INPUT FLOW** should be ON.
 
 ## After Save — test
 
-1. Complete **Client_Details** on WhatsApp (test number)
-2. Check terminal running `npm run dev` for webhook POST
-3. Open http://localhost:3000/admin/dashboard
-4. New lead with **WhatsApp** source should appear
+1. Message the bot and tap a **language** button (English / Hindi / Marathi)
+2. Check admin dashboard — a **new WhatsApp lead** should appear (name like `WhatsApp 91…`) with note that the form is not finished
+3. Open the lead → **Chat** — employee can message the customer immediately
+4. Complete **Client_Details** on WhatsApp
+5. Same lead should update with real name + loan fields (not a second lead)
 
 ---
 
 ## Simulate webhook without WhatsApp (local curl)
+
+**Early contact (POSTBACK-style — no form yet):**
+
+```powershell
+curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret-123" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"subscriber_id\":\"916300251728-390042\",\"phone_number\":\"6300251728\",\"postback_id\":\"English\",\"subscriber_name\":\"\"}"
+```
+
+**Form complete (USER INPUT FLOW):**
 
 ```powershell
 curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret-123" ^

@@ -16,12 +16,14 @@ export const createLeadSchema = z.object({
   harassment_faced: harassmentFacedSchema.optional(),
   notes: z.string().optional(),
   assigned_to: z.string().uuid().optional(),
+  additional_assignee_ids: z.array(z.string().uuid()).optional(),
   assignment_comment: z.string().optional(),
 });
 
 export const assignLeadSchema = z.object({
   lead_id: z.string().uuid(),
   assigned_to: z.string().uuid(),
+  additional_assignee_ids: z.array(z.string().uuid()).optional(),
   assignment_comment: z.string().optional(),
 });
 

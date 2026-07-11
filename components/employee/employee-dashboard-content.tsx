@@ -1,24 +1,39 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Lead } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { filterClients, filterLeads } from "@/lib/filters/list-search";
 import { isActiveEmployeeLead } from "@/lib/filters/employee-leads";
 import { AssignedLeadsTable } from "@/components/employee/assigned-leads-table";
+import { MyClientsTable } from "@/components/employee/my-clients-table";
 import { useRealtimeRows } from "@/lib/hooks/use-realtime-rows";
-import { ClientsTable } from "@/components/dashboard/clients-table";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
+import { SearchBar } from "@/components/dashboard/search-bar";
+
+const EMPTY_NOTICE_IDS: Record<string, string> = Object.freeze({});
 
 type EmployeeDashboardContentProps = {
   userId: string;
   leads: Lead[];
   clients: ClientOnboarding[];
+  latestNoticeIds?: Record<string, string>;
 };
 
-export function EmployeeDashboardContent({ userId, leads, clients }: EmployeeDashboardContentProps) {
+export function EmployeeDashboardContent({
+  userId,
+  leads,
+  clients,
+  latestNoticeIds,
+}: EmployeeDashboardContentProps) {
+  const noticeSource = latestNoticeIds ?? EMPTY_NOTICE_IDS;
   const [leadQuery, setLeadQuery] = useState("");
   const [clientQuery, setClientQuery] = useState("");
+  const [noticeIds, setNoticeIds] = useState(noticeSource);
+
+  useEffect(() => {
+    setNoticeIds(noticeSource);
+  }, [noticeSource]);
 
   const includeRow = useCallback(
     (lead: Lead) => isActiveEmployeeLead(lead, userId),
@@ -80,26 +95,33 @@ export function EmployeeDashboardContent({ userId, leads, clients }: EmployeeDas
         />
       </CollapsiblePanel>
 
-      <CollapsiblePanel
-        title="My clients"
-        subtitle={`${filteredClients.length} of ${liveClients.length} onboarded clients`}
-        search={{
-          value: clientQuery,
-          onChange: setClientQuery,
-          placeholder: "Search by client name, CLID, phone, or email...",
-        }}
-      >
-        <ClientsTable
+      {/* Flat section — no outer erp-panel card, no nested scroll */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="section-title">My clients</h2>
+          <p className="section-subtitle">
+            {filteredClients.length} of {liveClients.length} onboarded clients
+          </p>
+        </div>
+        <SearchBar
+          value={clientQuery}
+          onChange={setClientQuery}
+          placeholder="Search by client name, CLID, phone, or email..."
+          className="max-w-none"
+        />
+        <MyClientsTable
           clients={filteredClients}
-          showClientId
-          viewLinkPrefix="/employee/clients"
+          latestNoticeIds={noticeIds}
+          onNoticeSaved={(clientId, noticeId) =>
+            setNoticeIds((prev) => ({ ...prev, [clientId]: noticeId }))
+          }
           emptyMessage={
             liveClients.length > 0 && filteredClients.length === 0
               ? "No clients match your search."
               : undefined
           }
         />
-      </CollapsiblePanel>
+      </section>
     </div>
   );
 }

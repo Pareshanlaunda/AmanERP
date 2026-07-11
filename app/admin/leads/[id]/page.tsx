@@ -12,6 +12,7 @@ import { AppHeader } from "@/components/shared/app-header";
 import { AdminLeadDetailLive } from "@/components/admin/admin-lead-detail-live";
 import { Button } from "@/components/ui/button";
 import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
+import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 
 async function getLeadOnboarding(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -42,6 +43,7 @@ export default async function AdminLeadDetailPage({
   if (!lead) notFound();
 
   const typedLead = lead as Lead;
+  typedLead.additional_assignee_ids = await listAdditionalAssigneeIds(supabase, id);
 
   const [{ data: updates }, employees, notifications, comments, unread, authorNames, onboarding] =
     await Promise.all([

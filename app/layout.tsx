@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ui/responsive-toaster";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 
 const display = Plus_Jakarta_Sans({
@@ -23,8 +24,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AMAN ERP",
-  description: "Client onboarding and lead management",
+  title: BRAND_NAME,
+  description: BRAND_TAGLINE,
 };
 
 export const viewport: Viewport = {

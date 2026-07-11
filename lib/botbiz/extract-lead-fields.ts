@@ -28,6 +28,8 @@ export type BotbizLeadFields = {
   botbiz_subscriber_id: string | null;
   preferred_language: PreferredLanguage;
   whatsapp_slot_answers: WhatsAppSlotAnswer[];
+  /** True when lead was created before Client_Details finished (POSTBACK / first contact). */
+  is_early_contact: boolean;
 };
 
 const CLIENT_DETAILS_SLOTS: WhatsAppSlot[] = [
@@ -127,7 +129,31 @@ function recordKeys(record: Record<string, unknown>): string[] {
  *
  * We also check for Hindi/Marathi question text as a fallback.
  */
+function detectLanguageFromPostback(flat: Record<string, unknown>): PreferredLanguage | null {
+  const candidates = [
+    flat.postback_id,
+    flat["POSTBACK ID"],
+    flat.postbackId,
+    flat.postback,
+    flat.button_title,
+    flat.button_text,
+    flat.title,
+  ]
+    .filter((v) => v != null && String(v).trim() !== "")
+    .map((v) => String(v).toLowerCase());
+
+  for (const text of candidates) {
+    if (/marathi|मराठी/.test(text)) return "mr";
+    if (/hindi|हिंदी|हिन्दी/.test(text)) return "hi";
+    if (/english/.test(text)) return "en";
+  }
+  return null;
+}
+
 function detectPreferredLanguage(flat: Record<string, unknown>): PreferredLanguage {
+  const fromPostback = detectLanguageFromPostback(flat);
+  if (fromPostback) return fromPostback;
+
   // Check if Hindi-specific custom field ID has a value
   const hiNameId = BOTBIZ_CUSTOM_FIELD_IDS.full_name_hi;
   const hiName = flat[hiNameId];
@@ -374,8 +400,6 @@ export function extractBotbizLeadFields(payload: unknown): BotbizLeadFields | nu
     }
   }
 
-  if (!looksLikeName(client_name)) return null;
-
   const ordered = orderedUserInputAnswers(root);
 
   const phoneRaw = pickBySlotOrAlias(
@@ -388,6 +412,30 @@ export function extractBotbizLeadFields(payload: unknown): BotbizLeadFields | nu
     phoneRaw != null && !isMediaAnswer(phoneRaw)
       ? normalizePhone(String(phoneRaw))
       : phoneFromSubscriberId(botbiz_subscriber_id);
+
+  const hasRealName = looksLikeName(client_name);
+  // Early contact: POSTBACK / first message — phone or subscriber is enough
+  if (!hasRealName) {
+    if (!client_phone && !botbiz_subscriber_id) return null;
+    const preferred_language = detectPreferredLanguage(flat);
+    const displayPhone = client_phone ?? botbiz_subscriber_id?.split("-")[0] ?? "unknown";
+    return {
+      client_name: `WhatsApp ${displayPhone}`,
+      client_phone,
+      client_alternate_phone: null,
+      client_email: null,
+      loan_amount: null,
+      personal_loan_amount_range: null,
+      credit_card_amount_range: null,
+      loan_type: null,
+      harassment_faced: null,
+      notes: "Early WhatsApp contact — Client_Details not completed yet. Employee can follow up in chat.",
+      botbiz_subscriber_id,
+      preferred_language,
+      whatsapp_slot_answers: [],
+      is_early_contact: true,
+    };
+  }
 
   const loanTypeRaw = pickBySlotOrAlias(
     flat,
@@ -451,5 +499,6 @@ export function extractBotbizLeadFields(payload: unknown): BotbizLeadFields | nu
     botbiz_subscriber_id,
     preferred_language: detectPreferredLanguage(flat),
     whatsapp_slot_answers,
+    is_early_contact: false,
   };
 }

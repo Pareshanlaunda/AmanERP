@@ -3,7 +3,7 @@
 import { revalidateAfterUserCreated } from "@/lib/revalidate";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createUserSchema, type CreateUserInput } from "@/lib/validations/users";
+import { createUserSchema, adminResetPasswordSchema, type CreateUserInput, type AdminResetPasswordInput } from "@/lib/validations/users";
 import type { Profile } from "@/lib/types/database";
 
 export type ActionResult = { success: true } | { success: false; error: string };
@@ -90,6 +90,8 @@ async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionR
     full_name: data.full_name.trim(),
     role: data.role,
     employee_type: data.role === "employee" ? (data.employee_type ?? "general") : null,
+    address: data.address.trim(),
+    mobile: data.mobile.trim(),
   });
 
   if (profileError) {
@@ -132,4 +134,41 @@ export async function getUserRoleCounts() {
     admin: rows.filter((r) => r.role === "admin").length,
     employee: rows.filter((r) => r.role === "employee").length,
   };
+}
+
+/** Admin sets a new password for any user — no old password or email confirmation. */
+export async function adminResetUserPassword(
+  data: AdminResetPasswordInput
+): Promise<ActionResult> {
+  await requireUserWithRole(["admin"]);
+
+  const parsed = adminResetPasswordSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("id", parsed.data.user_id)
+    .maybeSingle();
+
+  if (profileError) {
+    return { success: false, error: profileError.message };
+  }
+  if (!profile) {
+    return { success: false, error: "User not found" };
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(parsed.data.user_id, {
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
 }
