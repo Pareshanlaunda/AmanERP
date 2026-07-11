@@ -29,12 +29,21 @@ export async function getAuthorNamesFromComments(
 }
 
 export async function getEmployeeProfilesFromDb(): Promise<
-  { id: string; full_name: string | null; role: string; employee_type: string | null; created_at: string }[]
+  {
+    id: string;
+    employee_code: string | null;
+    full_name: string | null;
+    role: string;
+    employee_type: string | null;
+    address: string | null;
+    mobile: string | null;
+    created_at: string;
+  }[]
 > {
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
-    .select("id, full_name, role, employee_type, created_at")
+    .select("id, employee_code, full_name, role, employee_type, address, mobile, created_at")
     .eq("role", "employee")
     .order("full_name", { ascending: true });
 

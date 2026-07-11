@@ -3,11 +3,12 @@ import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getEmployeesOverview } from "@/lib/actions/employees";
 import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
-import type { Lead, Profile } from "@/lib/types/database";
+import type { Lead } from "@/lib/types/database";
 import { AppHeader } from "@/components/shared/app-header";
 import { DashboardRecentLeads } from "@/components/admin/dashboard-recent-leads";
 import { RealtimeEmployeesOverview } from "@/components/admin/realtime-employees-overview";
 import { SuccessToast } from "@/components/dashboard/success-toast";
+import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
 
 export default async function AdminDashboardPage() {
   const current = await requireUserWithRole(["admin"]);
@@ -18,21 +19,20 @@ export default async function AdminDashboardPage() {
     supabase
       .from("leads")
       .select(
-        "id, client_name, client_phone, source, status, assigned_to, created_at, assigned_at, updated_at"
+        "id, client_name, client_phone, source, status, preferred_language, assigned_to, created_at, assigned_at, updated_at"
       )
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
 
-  const leads = leadsResult.data;
-
-  const employees = employeeStats.map(({ id, full_name, role, employee_type, created_at, email }) => ({
-    id,
-    full_name,
-    role,
-    employee_type,
-    created_at,
-    email,
+  const rawLeads = (leadsResult.data ?? []) as Lead[];
+  const assigneeMap = await listAdditionalAssigneeIdsForLeads(
+    supabase,
+    rawLeads.map((l) => l.id)
+  );
+  const leads = rawLeads.map((lead) => ({
+    ...lead,
+    additional_assignee_ids: assigneeMap.get(lead.id) ?? [],
   }));
 
   return (
@@ -50,8 +50,8 @@ export default async function AdminDashboardPage() {
         </Suspense>
 
         <DashboardRecentLeads
-          initialLeads={(leads ?? []) as Lead[]}
-          employees={employees as Profile[]}
+          initialLeads={leads}
+          employees={employeeStats}
         />
 
         <RealtimeEmployeesOverview initialEmployees={employeeStats} />

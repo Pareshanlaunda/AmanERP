@@ -26,9 +26,13 @@ export type NotificationType = "lead_assigned" | "lead_converted" | "lead_update
 
 export type Profile = {
   id: string;
+  /** Human-readable staff ID, e.g. EMPID000001 (auto-assigned). */
+  employee_code: string | null;
   full_name: string | null;
   role: UserRole;
   employee_type: EmployeeType | null;
+  address: string | null;
+  mobile: string | null;
   created_at: string;
 };
 
@@ -61,6 +65,8 @@ export type Lead = {
   assigned_to: string | null;
   assigned_at: string | null;
   assignment_comment: string | null;
+  /** Optional co-assignees (not stored on leads row; joined from lead_additional_assignees). */
+  additional_assignee_ids?: string[] | null;
   converted_onboarding_id: string | null;
   onboarding_record_id: string | null;
   lost_reason: string | null;

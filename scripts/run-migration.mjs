@@ -50,6 +50,11 @@ const MIGRATION_FILES = [
   "supabase/migration-v19-webhook-idempotency.sql",
   "supabase/migration-v20-security-hardening.sql",
   "supabase/migration-v21-whatsapp-slot-answers.sql",
+  "supabase/migration-v22-additional-assignees.sql",
+  "supabase/migration-v23-admin-reassign-client.sql",
+  "supabase/migration-v24-client-notices.sql",
+  "supabase/migration-v25-profile-address-mobile.sql",
+  "supabase/migration-v26-empid-clid-daily.sql",
 ];
 
 function getDatabaseUrls() {

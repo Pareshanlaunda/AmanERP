@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { signIn } from "@/lib/actions/auth";
+import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -17,20 +18,37 @@ export function LoginForm() {
     const password = formData.get("password") as string;
 
     startTransition(async () => {
-      const result = await signIn(email, password);
-      if (result && !result.success) {
-        setError(result.error);
+      try {
+        const result = await signIn(email, password);
+        if (result && !result.success) {
+          setError(result.error);
+        }
+      } catch (err) {
+        const digest =
+          typeof err === "object" && err && "digest" in err
+            ? String((err as { digest?: string }).digest)
+            : "";
+        if (digest.startsWith("NEXT_REDIRECT")) throw err;
+
+        const message = err instanceof Error ? err.message : "Sign in failed";
+        setError(
+          /failed to fetch|networkerror|load failed/i.test(message)
+            ? "Cannot reach the server. Confirm npm run dev is running on http://localhost:3000, hard-refresh, and try again."
+            : message
+        );
       }
     });
   }
 
   return (
-    <div className="erp-panel w-full max-w-md overflow-hidden p-0">
-      <div className="border-b border-border/70 bg-accent/40 px-6 py-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">AMAN ERP</p>
+    <div className="erp-panel w-full max-w-md overflow-hidden p-0 shadow-lg">
+      <div className="border-b border-border/70 bg-accent/40 px-6 py-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          {BRAND_SHORT}
+        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Access leads, clients, and onboarding forms
+          Access {BRAND_NAME} leads, clients, and onboarding
         </p>
       </div>
       <div className="px-6 py-6">
@@ -55,11 +73,14 @@ export function LoginForm() {
               autoComplete="current-password"
             />
           </div>
-          {error && (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+          {error ? (
+            <div
+              className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
               {error}
             </div>
-          )}
+          ) : null}
           <Button type="submit" className="w-full" disabled={isPending}>
             {isPending ? "Signing in..." : "Sign in"}
           </Button>

@@ -13,6 +13,7 @@ import {
   RECOVERY_HARASSMENT_OPTIONS,
 } from "@/lib/validations/leads";
 import { formatEmployeeOptionLabel } from "@/lib/labels/employees";
+import { AdditionalAssigneesPicker } from "@/components/admin/additional-assignees-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +38,12 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
   const [creditCardRange, setCreditCardRange] = useState("");
   const [harassmentFaced, setHarassmentFaced] = useState<HarassmentFaced | "">("");
   const [assignedTo, setAssignedTo] = useState("");
+  const [additionalIds, setAdditionalIds] = useState<string[]>([]);
+
+  function handlePrimaryChange(id: string) {
+    setAssignedTo(id);
+    setAdditionalIds((prev) => prev.filter((x) => x !== id));
+  }
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
@@ -51,6 +58,7 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
         harassment_faced: harassmentFaced || undefined,
         notes: (formData.get("notes") as string) || undefined,
         assigned_to: assignedTo || undefined,
+        additional_assignee_ids: assignedTo ? additionalIds : undefined,
         assignment_comment: (formData.get("assignment_comment") as string) || undefined,
       });
 
@@ -191,20 +199,23 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <Label>Employee</Label>
+                <Label>Primary employee</Label>
                 {assignedTo && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="h-auto px-2 py-1 text-xs"
-                    onClick={() => setAssignedTo("")}
+                    onClick={() => {
+                      setAssignedTo("");
+                      setAdditionalIds([]);
+                    }}
                   >
                     Clear
                   </Button>
                 )}
               </div>
-              <Select value={assignedTo || undefined} onValueChange={setAssignedTo}>
+              <Select value={assignedTo || undefined} onValueChange={handlePrimaryChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select employee (optional)" />
                 </SelectTrigger>
@@ -224,15 +235,24 @@ export function CreateLeadForm({ employees }: CreateLeadFormProps) {
               </Select>
             </div>
             {assignedTo && (
-              <div className="space-y-2">
-                <Label htmlFor="assignment_comment">Additional info for employee (optional)</Label>
-                <Textarea
-                  id="assignment_comment"
-                  name="assignment_comment"
-                  rows={3}
-                  placeholder="Context or instructions — shown under Additional info on the lead"
+              <>
+                <AdditionalAssigneesPicker
+                  employees={employees}
+                  primaryId={assignedTo}
+                  selectedIds={additionalIds}
+                  onChange={setAdditionalIds}
+                  disabled={isPending}
                 />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="assignment_comment">Additional info for employee (optional)</Label>
+                  <Textarea
+                    id="assignment_comment"
+                    name="assignment_comment"
+                    rows={3}
+                    placeholder="Context or instructions — shown under Additional info on the lead"
+                  />
+                </div>
+              </>
             )}
           </div>
 

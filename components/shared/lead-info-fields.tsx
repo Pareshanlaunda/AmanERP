@@ -79,9 +79,22 @@ function SlotValue({
   );
 }
 
-export function LeadInfoFields({ lead }: { lead: Lead }) {
+export function LeadInfoFields({
+  lead,
+  employeeNames,
+}: {
+  lead: Lead;
+  /** Optional id → display name for primary + additional assignees */
+  employeeNames?: Record<string, string>;
+}) {
   const additionalInfo = getLeadAdditionalInfo(lead);
   const slots = lead.whatsapp_slot_answers as WhatsAppSlotAnswer[] | null | undefined;
+  const primaryName = lead.assigned_to
+    ? employeeNames?.[lead.assigned_to] ?? null
+    : null;
+  const additionalNames = (lead.additional_assignee_ids ?? [])
+    .filter((id) => id !== lead.assigned_to)
+    .map((id) => employeeNames?.[id] ?? "Employee");
 
   return (
     <>
@@ -160,6 +173,18 @@ export function LeadInfoFields({ lead }: { lead: Lead }) {
         <p className="flex flex-wrap items-center gap-2">
           <span className="font-medium">Customer language:</span>
           <LanguageBadge language={lead.preferred_language} showFull />
+        </p>
+      )}
+      {lead.assigned_to && (
+        <p>
+          <span className="font-medium">Primary assignee:</span>{" "}
+          {primaryName ?? "Assigned"}
+        </p>
+      )}
+      {additionalNames.length > 0 && (
+        <p>
+          <span className="font-medium">Additional employees:</span>{" "}
+          {additionalNames.join(", ")}
         </p>
       )}
       <p>

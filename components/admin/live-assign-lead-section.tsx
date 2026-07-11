@@ -11,15 +11,12 @@ type LiveAssignLeadSectionProps = {
 export function LiveAssignLeadSection({ employees }: LiveAssignLeadSectionProps) {
   const { lead } = useLeadLive();
 
-  if (lead.status === "converted" || lead.status === "lost") {
-    return null;
-  }
-
   return (
     <AssignLeadForm
       leadId={lead.id}
       employees={employees}
       currentAssignee={lead.assigned_to}
+      currentAdditionalIds={lead.additional_assignee_ids ?? []}
     />
   );
 }

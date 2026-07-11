@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import type { EmployeeStats } from "@/lib/types/database";
 import { EMPLOYEE_TYPE_LABELS } from "@/lib/types/database";
 import { filterEmployees } from "@/lib/filters/list-search";
@@ -28,15 +28,23 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
       search={{
         value: query,
         onChange: setQuery,
-        placeholder: "Search by name, email, or employee type...",
+        placeholder: "Search by name, EMPID, email, or employee type...",
       }}
       headerActions={
-        <Button asChild size="sm" className="w-full sm:w-auto">
-          <Link href="/admin/users">
-            <UserPlus className="h-4 w-4" />
-            Add user
-          </Link>
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
+            <Link href="/admin/users">
+              <Users className="h-4 w-4" />
+              Manage users
+            </Link>
+          </Button>
+          <Button asChild size="sm" className="w-full sm:w-auto">
+            <Link href="/admin/users/new">
+              <UserPlus className="h-4 w-4" />
+              Add user
+            </Link>
+          </Button>
+        </div>
       }
     >
       {filtered.length === 0 ? (
@@ -47,12 +55,20 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
               : "No employees match your search."}
           </p>
           {employees.length === 0 ? (
-            <Button asChild className="mt-4 w-full sm:w-auto" size="sm">
-              <Link href="/admin/users">
-                <UserPlus className="h-4 w-4" />
-                Add user
-              </Link>
-            </Button>
+            <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+              <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
+                <Link href="/admin/users">
+                  <Users className="h-4 w-4" />
+                  Manage users
+                </Link>
+              </Button>
+              <Button asChild size="sm" className="w-full sm:w-auto">
+                <Link href="/admin/users/new">
+                  <UserPlus className="h-4 w-4" />
+                  Add user
+                </Link>
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : (
@@ -61,6 +77,7 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Employee ID</TableHead>
                   <TableHead>Employee</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Email</TableHead>
@@ -74,6 +91,9 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
               <TableBody>
                 {filtered.map((employee) => (
                   <TableRow key={employee.id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {employee.employee_code ?? "—"}
+                    </TableCell>
                     <TableCell>
                       <Link
                         href={`/admin/employees/${employee.id}`}
@@ -116,6 +136,9 @@ export function EmployeesOverview({ employees }: { employees: EmployeeStats[] })
                 >
                   {employee.full_name ?? "Employee"}
                 </Link>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  {employee.employee_code ?? "—"}
+                </p>
                 <p className="mt-1 break-all text-muted-foreground">{employee.email ?? "—"}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {EMPLOYEE_TYPE_LABELS[employee.employee_type ?? "general"]}

@@ -14,6 +14,7 @@ import {
 } from "@/lib/botbiz/parse-conversation-message";
 import { getUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
+import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 
 export type WhatsAppChatActionResult<T> =
   | { success: true; data: T }
@@ -55,27 +56,25 @@ async function loadLeadForChat(
   if (!user) return { success: false, error: "Unauthorized" };
 
   const supabase = await createClient();
-  let query = supabase
+  const { data: lead, error } = await supabase
     .from("leads")
     .select("id, source, client_phone, botbiz_subscriber_id, assigned_to")
-    .eq("id", leadId);
-
-  if (user.role === "employee") {
-    query = query.eq("assigned_to", user.id);
-  } else if (user.role !== "admin") {
-    return { success: false, error: "Unauthorized" };
-  }
-
-  const { data: lead, error } = await query.single();
+    .eq("id", leadId)
+    .single();
 
   if (error || !lead) {
-    return {
-      success: false,
-      error:
-        user.role === "employee"
-          ? "Lead not found or not assigned to you"
-          : "Lead not found",
-    };
+    return { success: false, error: "Lead not found" };
+  }
+
+  if (user.role === "employee") {
+    const isPrimary = lead.assigned_to === user.id;
+    const isAdditional =
+      !isPrimary && (await listAdditionalAssigneeIds(supabase, leadId)).includes(user.id);
+    if (!isPrimary && !isAdditional) {
+      return { success: false, error: "Lead not found or not assigned to you" };
+    }
+  } else if (user.role !== "admin") {
+    return { success: false, error: "Unauthorized" };
   }
 
   const typed = lead as LeadChatRow;

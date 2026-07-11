@@ -22,6 +22,23 @@ type LeadsTableProps = {
   emptyMessage?: string;
 };
 
+function formatAssignees(
+  lead: Lead,
+  employeeMap: Map<string, string>
+): string {
+  const primary = lead.assigned_to
+    ? employeeMap.get(lead.assigned_to) ?? "Employee"
+    : null;
+  const extras = (lead.additional_assignee_ids ?? [])
+    .filter((id) => id !== lead.assigned_to)
+    .map((id) => employeeMap.get(id) ?? "Employee");
+
+  if (!primary && extras.length === 0) return "—";
+  if (!primary) return extras.join(", ");
+  if (extras.length === 0) return primary;
+  return `${primary} + ${extras.join(", ")}`;
+}
+
 export function LeadsTable({
   leads,
   employees,
@@ -73,8 +90,8 @@ export function LeadsTable({
                   <StatusBadge status={lead.status} />
                 </TableCell>
                 {!hideAssignedColumn && (
-                  <TableCell>
-                    {lead.assigned_to ? employeeMap.get(lead.assigned_to) ?? "—" : "—"}
+                  <TableCell className="max-w-[14rem] truncate" title={formatAssignees(lead, employeeMap)}>
+                    {formatAssignees(lead, employeeMap)}
                   </TableCell>
                 )}
                 <TableCell>{formatDate(lead.created_at)}</TableCell>
@@ -118,10 +135,7 @@ export function LeadsTable({
                 <LanguageBadge language={lead.preferred_language} />
               </p>
               {!hideAssignedColumn && (
-                <p>
-                  Assigned:{" "}
-                  {lead.assigned_to ? employeeMap.get(lead.assigned_to) ?? "—" : "Unassigned"}
-                </p>
+                <p>Assigned: {formatAssignees(lead, employeeMap)}</p>
               )}
               <p>Created: {formatDate(lead.created_at)}</p>
             </div>

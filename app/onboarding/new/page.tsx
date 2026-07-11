@@ -6,11 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/lib/types/database";
 import {
   buildOnboardingDefaultsFromLead,
-  isWhatsAppLeadWithCapturedDetails,
 } from "@/lib/leads/whatsapp-to-onboarding-defaults";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { listAdvocateEmployees } from "@/lib/actions/advocates";
+import { BRAND_SHORT } from "@/lib/brand";
 
 export default async function NewOnboardingPage({
   searchParams,
@@ -37,7 +38,7 @@ export default async function NewOnboardingPage({
   }
 
   const whatsappDefaults = lead ? buildOnboardingDefaultsFromLead(lead) : null;
-  const fromWhatsApp = lead ? isWhatsAppLeadWithCapturedDetails(lead) : false;
+  const advocates = await listAdvocateEmployees();
 
   const backHref = current.role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
 
@@ -55,17 +56,15 @@ export default async function NewOnboardingPage({
               </Button>
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
-                  AMAN ERP
+                  {BRAND_SHORT}
                 </p>
                 <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                   Client onboarding
                 </h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {fromWhatsApp
-                    ? "WhatsApp details are already saved — add income, lenders, and call notes only."
-                    : leadId
-                      ? "Complete remaining details, then mark the lead as successful."
-                      : "Fill in all client details and submit."}
+                  {leadId
+                    ? "Details from the lead are prefilled — review, update if needed, then submit."
+                    : "Fill in all client details and submit."}
                 </p>
               </div>
             </div>
@@ -76,14 +75,13 @@ export default async function NewOnboardingPage({
       <main className="page-container-form">
         <OnboardingForm
           leadId={leadId}
-          lead={lead}
-          fromWhatsApp={fromWhatsApp}
-          defaultAdvocateEmail={current.email}
-          defaultAdvocateName={current.profile.full_name ?? ""}
-          defaultClientName={whatsappDefaults?.formDefaults.client_name ?? ""}
-          defaultClientEmail={whatsappDefaults?.formDefaults.client_email ?? ""}
-          defaultClientPhone={whatsappDefaults?.formDefaults.client_contact_number ?? ""}
-          defaultLoanType={whatsappDefaults?.formDefaults.loan_type}
+          advocates={advocates}
+          defaultClientName={whatsappDefaults?.formDefaults.client_name ?? lead?.client_name ?? ""}
+          defaultClientEmail={whatsappDefaults?.formDefaults.client_email ?? lead?.client_email ?? ""}
+          defaultClientPhone={
+            whatsappDefaults?.formDefaults.client_contact_number ?? lead?.client_phone ?? ""
+          }
+          defaultLoanType={whatsappDefaults?.formDefaults.loan_type ?? lead?.loan_type ?? undefined}
           defaultHarassmentAnswer={whatsappDefaults?.formDefaults.harassment_answer}
           defaultHarassmentType={whatsappDefaults?.formDefaults.harassment_type}
           whatsappPersonalLoanRange={whatsappDefaults?.whatsappRanges.personalLoan ?? null}

@@ -21,6 +21,11 @@ import {
   type LeadOutcomeInput,
 } from "@/lib/validations/lead-outcomes";
 import type { LeadStatus, OutcomeCategory } from "@/lib/types/database";
+import {
+  listAdditionalAssigneeIds,
+  normalizeAdditionalAssigneeIds,
+  replaceAdditionalAssignees,
+} from "@/lib/leads/assignees";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -37,6 +42,58 @@ async function createNotification(
   await supabase.from("notifications").insert(params);
 }
 
+async function notifyAssignees(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: {
+    userIds: string[];
+    clientName: string;
+    leadId: string;
+    assignmentComment: string | null;
+    additional?: boolean;
+  }
+) {
+  const unique = [...new Set(params.userIds.filter(Boolean))];
+  await Promise.all(
+    unique.map((user_id) =>
+      createNotification(supabase, {
+        user_id,
+        type: "lead_assigned",
+        title: params.additional ? "Lead shared with you" : "New lead assigned",
+        body: params.assignmentComment
+          ? `${params.clientName}: ${params.assignmentComment}`
+          : params.additional
+            ? `You were added as an additional assignee on lead: ${params.clientName}`
+            : `You have been assigned lead: ${params.clientName}`,
+        lead_id: params.leadId,
+      })
+    )
+  );
+}
+
+/** Fetch lead if current employee is primary or additional assignee. */
+async function getLeadForAssignee<T extends { assigned_to?: string | null }>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  leadId: string,
+  userId: string,
+  select: string
+): Promise<T | null> {
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .select(select)
+    .eq("id", leadId)
+    .single();
+
+  if (error || !lead) return null;
+
+  const row = lead as unknown as T;
+  if (row.assigned_to === userId) return row;
+
+  const additional = await listAdditionalAssigneeIds(supabase, leadId);
+  if (additional.includes(userId)) return row;
+
+  return null;
+}
+
 export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
   const user = await requireUserWithRole(["admin"]);
   const parsed = createLeadSchema.safeParse(data);
@@ -48,6 +105,9 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
   const assignedTo = parsed.data.assigned_to ?? null;
   const assignmentComment = parsed.data.assignment_comment?.trim() || null;
   const isAssigned = !!assignedTo;
+  const additionalIds = isAssigned
+    ? normalizeAdditionalAssigneeIds(assignedTo, parsed.data.additional_assignee_ids)
+    : [];
 
   const { data: lead, error } = await supabase
     .from("leads")
@@ -74,16 +134,29 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
 
   if (error) return { success: false, error: error.message };
 
-  if (isAssigned && lead) {
-    await createNotification(supabase, {
-      user_id: assignedTo,
-      type: "lead_assigned",
-      title: "New lead assigned",
-      body: assignmentComment
-        ? `${lead.client_name}: ${assignmentComment}`
-        : `You have been assigned lead: ${lead.client_name}`,
-      lead_id: lead.id,
+  if (isAssigned && lead && assignedTo) {
+    const { error: additionalError } = await replaceAdditionalAssignees(supabase, {
+      leadId: lead.id,
+      employeeIds: additionalIds,
+      assignedBy: user.id,
     });
+    if (additionalError) return { success: false, error: additionalError };
+
+    await notifyAssignees(supabase, {
+      userIds: [assignedTo],
+      clientName: lead.client_name,
+      leadId: lead.id,
+      assignmentComment,
+    });
+    if (additionalIds.length > 0) {
+      await notifyAssignees(supabase, {
+        userIds: additionalIds,
+        clientName: lead.client_name,
+        leadId: lead.id,
+        assignmentComment,
+        additional: true,
+      });
+    }
     revalidateAfterLeadCreated({ assigned: true });
   } else {
     revalidateAfterLeadCreated();
@@ -93,7 +166,7 @@ export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
 }
 
 export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
-  await requireUserWithRole(["admin"]);
+  const user = await requireUserWithRole(["admin"]);
   const parsed = assignLeadSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
@@ -102,7 +175,7 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: lead, error: fetchError } = await supabase
     .from("leads")
-    .select("client_name")
+    .select("client_name, assigned_to, status, onboarding_record_id, converted_onboarding_id")
     .eq("id", parsed.data.lead_id)
     .single();
 
@@ -110,28 +183,73 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
     return { success: false, error: "Lead not found" };
   }
 
+  const additionalIds = normalizeAdditionalAssigneeIds(
+    parsed.data.assigned_to,
+    parsed.data.additional_assignee_ids
+  );
+  const previousAdditional = await listAdditionalAssigneeIds(supabase, parsed.data.lead_id);
+  const previousPrimary = lead.assigned_to as string | null;
+  const assignmentComment = parsed.data.assignment_comment?.trim() || null;
+  const currentStatus = lead.status as string;
+  // Don't pull converted/lost leads back to "assigned" when only changing owner
+  const nextStatus =
+    currentStatus === "converted" || currentStatus === "lost" ? currentStatus : "assigned";
+
   const { error } = await supabase
     .from("leads")
     .update({
       assigned_to: parsed.data.assigned_to,
       assigned_at: new Date().toISOString(),
-      assignment_comment: parsed.data.assignment_comment?.trim() || null,
-      status: "assigned",
+      assignment_comment: assignmentComment,
+      status: nextStatus,
       updated_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.lead_id);
 
   if (error) return { success: false, error: error.message };
 
-  await createNotification(supabase, {
-    user_id: parsed.data.assigned_to,
-    type: "lead_assigned",
-    title: "New lead assigned",
-    body: parsed.data.assignment_comment
-      ? `${lead.client_name}: ${parsed.data.assignment_comment}`
-      : `You have been assigned lead: ${lead.client_name}`,
-    lead_id: parsed.data.lead_id,
+  const { error: additionalError } = await replaceAdditionalAssignees(supabase, {
+    leadId: parsed.data.lead_id,
+    employeeIds: additionalIds,
+    assignedBy: user.id,
   });
+  if (additionalError) return { success: false, error: additionalError };
+
+  // Keep linked client ownership in sync with primary assignee
+  if (parsed.data.assigned_to !== previousPrimary) {
+    const clientId =
+      (lead.onboarding_record_id as string | null) ??
+      (lead.converted_onboarding_id as string | null) ??
+      null;
+
+    if (clientId) {
+      await supabase
+        .from("client_onboardings")
+        .update({
+          submitted_by: parsed.data.assigned_to,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", clientId);
+    }
+
+    await notifyAssignees(supabase, {
+      userIds: [parsed.data.assigned_to],
+      clientName: lead.client_name,
+      leadId: parsed.data.lead_id,
+      assignmentComment,
+    });
+  }
+
+  const newlyAdded = additionalIds.filter((id) => !previousAdditional.includes(id));
+  if (newlyAdded.length > 0) {
+    await notifyAssignees(supabase, {
+      userIds: newlyAdded,
+      clientName: lead.client_name,
+      leadId: parsed.data.lead_id,
+      assignmentComment,
+      additional: true,
+    });
+  }
 
   revalidateLeadMutation(parsed.data.lead_id);
   return { success: true };
@@ -145,14 +263,14 @@ export async function addLeadUpdate(data: AddLeadUpdateInput): Promise<ActionRes
   }
 
   const supabase = await createClient();
-  const { data: lead, error: fetchError } = await supabase
-    .from("leads")
-    .select("status, client_name, created_by")
-    .eq("id", parsed.data.lead_id)
-    .eq("assigned_to", user.id)
-    .single();
+  const lead = await getLeadForAssignee<{
+    status: string;
+    client_name: string;
+    created_by: string;
+    assigned_to: string | null;
+  }>(supabase, parsed.data.lead_id, user.id, "status, client_name, created_by, assigned_to");
 
-  if (fetchError || !lead) {
+  if (!lead) {
     return { success: false, error: "Lead not found or not assigned to you" };
   }
 
@@ -191,14 +309,14 @@ export async function markLeadInProgress(leadId: string): Promise<ActionResult> 
   const user = await requireUserWithRole(["employee"]);
   const supabase = await createClient();
 
-  const { data: lead, error: fetchError } = await supabase
-    .from("leads")
-    .select("id, status")
-    .eq("id", leadId)
-    .eq("assigned_to", user.id)
-    .single();
+  const lead = await getLeadForAssignee<{ id: string; status: string; assigned_to: string | null }>(
+    supabase,
+    leadId,
+    user.id,
+    "id, status, assigned_to"
+  );
 
-  if (fetchError || !lead) {
+  if (!lead) {
     return { success: false, error: "Lead not found" };
   }
 
@@ -231,14 +349,21 @@ export async function markLeadSuccessful(
   const user = await requireUserWithRole(["employee"]);
   const supabase = await createClient();
 
-  const { data: lead, error: fetchError } = await supabase
-    .from("leads")
-    .select("id, status, client_name, created_by, onboarding_record_id")
-    .eq("id", leadId)
-    .eq("assigned_to", user.id)
-    .single();
+  const lead = await getLeadForAssignee<{
+    id: string;
+    status: string;
+    client_name: string;
+    created_by: string;
+    onboarding_record_id: string | null;
+    assigned_to: string | null;
+  }>(
+    supabase,
+    leadId,
+    user.id,
+    "id, status, client_name, created_by, onboarding_record_id, assigned_to"
+  );
 
-  if (fetchError || !lead) {
+  if (!lead) {
     return { success: false, error: "Lead not found" };
   }
 
@@ -300,14 +425,15 @@ export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionR
   }
 
   const supabase = await createClient();
-  const { data: lead, error: fetchError } = await supabase
-    .from("leads")
-    .select("id, status, client_name, created_by")
-    .eq("id", parsed.data.lead_id)
-    .eq("assigned_to", user.id)
-    .single();
+  const lead = await getLeadForAssignee<{
+    id: string;
+    status: string;
+    client_name: string;
+    created_by: string;
+    assigned_to: string | null;
+  }>(supabase, parsed.data.lead_id, user.id, "id, status, client_name, created_by, assigned_to");
 
-  if (fetchError || !lead) {
+  if (!lead) {
     return { success: false, error: "Lead not found" };
   }
 

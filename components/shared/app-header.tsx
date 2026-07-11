@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
+import { BRAND_SHORT } from "@/lib/brand";
 import type { Notification } from "@/lib/types/database";
 import { NotificationBell } from "@/components/shared/notification-bell";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -30,7 +31,7 @@ export function AppHeader({
       <div className="page-container flex flex-col gap-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-4">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/80">
-            AMAN ERP
+            {BRAND_SHORT}
           </p>
           <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
           <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
