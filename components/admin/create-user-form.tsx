@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createFirstAdmin, createUser } from "@/lib/actions/users";
+import { createUser } from "@/lib/actions/users";
 import type { UserRole, EmployeeType } from "@/lib/types/database";
-import { EMPLOYEE_TYPE_FORM_OPTIONS } from "@/lib/validations/users";
+import { EmployeeTypeDropdown } from "@/components/admin/employee-type-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -19,11 +19,10 @@ import {
 } from "@/components/ui/select";
 
 type CreateUserFormProps = {
-  mode?: "admin" | "setup";
   defaultRole?: UserRole;
 };
 
-export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: CreateUserFormProps) {
+export function CreateUserForm({ defaultRole = "employee" }: CreateUserFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [role, setRole] = useState<UserRole>(defaultRole);
@@ -41,39 +40,28 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
         full_name: formData.get("full_name") as string,
         address: formData.get("address") as string,
         mobile: formData.get("mobile") as string,
-        role: mode === "setup" ? ("admin" as const) : role,
-        employee_type: mode === "setup" || role === "admin" ? undefined : employeeType,
+        role,
+        employee_type: role === "admin" ? undefined : employeeType,
       };
 
-      const result =
-        mode === "setup"
-          ? await createFirstAdmin(payload, formData.get("setup_token") as string | null)
-          : await createUser(payload);
+      const result = await createUser(payload);
 
       if (!result.success) {
         toast.error(result.error);
         return;
       }
 
-      toast.success(mode === "setup" ? "Admin account created. You can sign in now." : "User created");
-      if (mode === "setup") {
-        router.push("/login");
-      } else {
-        router.push("/admin/users");
-      }
+      toast.success("User created");
+      router.push("/admin/users");
     });
   }
 
   return (
-    <section className="erp-panel overflow-hidden">
+    <section className="erp-panel">
       <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
-        <h2 className="section-title">
-          {mode === "setup" ? "Create first admin" : "Create user"}
-        </h2>
+        <h2 className="section-title">Create user</h2>
         <p className="section-subtitle">
-          {mode === "setup"
-            ? "One-time setup — creates the first admin account for this app."
-            : "Add a new admin or employee with email and password."}
+          Add a new admin or employee with email and password.
         </p>
       </div>
       <div className="p-4 sm:p-6">
@@ -115,60 +103,30 @@ export function CreateUserForm({ mode = "admin", defaultRole = "employee" }: Cre
               id="password"
               name="password"
               required
-              minLength={6}
-              placeholder="Min 6 characters"
+              minLength={8}
+              placeholder="Min 8 characters, letter + number"
             />
           </div>
-          {mode === "setup" && (
+          <div className="space-y-2">
+            <Label>Access role</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="employee">Employee</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {role === "employee" && (
             <div className="space-y-2">
-              <Label htmlFor="setup_token">Setup token (if configured)</Label>
-              <Input
-                id="setup_token"
-                name="setup_token"
-                type="password"
-                autoComplete="off"
-                placeholder="Required when SETUP_TOKEN is set in env"
-              />
+              <Label>Employee type</Label>
+              <EmployeeTypeDropdown value={employeeType} onChange={setEmployeeType} />
             </div>
           )}
-          {mode === "admin" && (
-            <>
-              <div className="space-y-2">
-                <Label>Access role</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">Employee</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {role === "employee" && (
-                <div className="space-y-2">
-                  <Label>Employee type</Label>
-                  <Select
-                    value={employeeType}
-                    onValueChange={(v) => setEmployeeType(v as EmployeeType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select employee type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EMPLOYEE_TYPE_FORM_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </>
-          )}
-          <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-            {isPending ? "Creating..." : mode === "setup" ? "Create admin & go to login" : "Create user"}
+          <Button type="submit" disabled={isPending} className="w-full scroll-mb-24 sm:w-auto sm:scroll-mb-28">
+            {isPending ? "Creating..." : "Create user"}
           </Button>
         </form>
       </div>

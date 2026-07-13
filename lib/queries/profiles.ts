@@ -2,14 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function getAuthorNamesForIds(
-  authorIds: string[],
-  supabase?: Awaited<ReturnType<typeof createClient>>
+  authorIds: string[]
 ): Promise<Record<string, string>> {
   const uniqueIds = [...new Set(authorIds.filter(Boolean))];
   if (uniqueIds.length === 0) return {};
 
-  const client = supabase ?? (await createClient());
-  const { data } = await client.from("profiles").select("id, full_name").in("id", uniqueIds);
+  // Admin client: employees can only SELECT own profile under RLS; comments need coworker names.
+  const admin = createAdminClient();
+  const { data } = await admin.from("profiles").select("id, full_name").in("id", uniqueIds);
 
   return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name ?? "User"]));
 }
@@ -25,7 +25,7 @@ export async function getAuthorNamesFromComments(
     .eq("lead_id", leadId);
 
   const authorIds = (comments ?? []).map((c) => c.author_id);
-  return getAuthorNamesForIds(authorIds, client);
+  return getAuthorNamesForIds(authorIds);
 }
 
 export async function getEmployeeProfilesFromDb(): Promise<

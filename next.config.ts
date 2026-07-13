@@ -13,7 +13,7 @@ const connectSrc = [
 ].join(" ");
 
 const nextConfig: NextConfig = {
-  // Ensure notice Word templates + signature asset are available to the download API on Vercel
+  // Ensure notice Word templates + signature asset are available to the download API
   outputFileTracingIncludes: {
     "/api/notices/[id]/download": [
       "./templates/notices/**/*",
@@ -32,7 +32,10 @@ const nextConfig: NextConfig = {
         value: [
           "default-src 'self'",
           `connect-src ${connectSrc}`,
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          // Next.js needs unsafe-inline for hydration; drop unsafe-eval in production
+          isProd
+            ? "script-src 'self' 'unsafe-inline'"
+            : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob:",
           "font-src 'self'",

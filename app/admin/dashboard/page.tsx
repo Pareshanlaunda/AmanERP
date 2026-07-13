@@ -13,6 +13,14 @@ import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
 export default async function AdminDashboardPage() {
   const current = await requireUserWithRole(["admin"]);
   const supabase = await createClient();
+
+  // Pull recent Botbiz contacts → leads (inbound first msg OR we messaged first).
+  // Soft-fail: dashboard still loads if Botbiz API is down / unconfigured.
+  const { syncRecentWhatsAppLeadsFromBotbiz } = await import(
+    "@/lib/botbiz/sync-subscribers"
+  );
+  await syncRecentWhatsAppLeadsFromBotbiz({ limit: 40 }).catch(() => null);
+
   const [notifications, employeeStats, leadsResult] = await Promise.all([
     getNotifications(),
     getEmployeesOverview(),

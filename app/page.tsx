@@ -8,7 +8,6 @@ export default async function HomePage() {
     redirect(dashboardPathForRole(current.role));
   }
 
-  // Admin already exists — always send unauthenticated users to login.
-  // The /setup route has its own guard if someone needs first-time setup.
+  // Unauthenticated users always go to login (bootstrap /setup removed).
   redirect("/login");
 }

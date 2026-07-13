@@ -2,10 +2,10 @@
  * Simple in-memory rate limiters.
  *
  * Login: failed attempts per IP.
- * Webhook: requests per secret/IP window.
+ * Webhook: requests per IP window.
+ * Notice download: generations per user.
  *
- * Intentionally no Redis — fine for small teams on single/few Vercel instances.
- * Resets on cold start.
+ * Fine on a single Hostinger Node process. Resets on process restart.
  */
 
 type AttemptRecord = {
@@ -62,8 +62,10 @@ function createLimiter(maxAttempts: number, windowMs: number) {
 }
 
 const loginLimiter = createLimiter(5, 15 * 60 * 1000);
-/** ~60 webhook POSTs / minute per key (secret or IP). */
+/** ~60 webhook POSTs / minute per IP. */
 const webhookLimiter = createLimiter(60, 60 * 1000);
+/** Doc generation is CPU-heavy — 20 downloads / minute per user. */
+const noticeDownloadLimiter = createLimiter(20, 60 * 1000);
 
 export function isRateLimited(identifier: string): boolean {
   return loginLimiter.isLimited(identifier);
@@ -87,4 +89,12 @@ export function isWebhookRateLimited(identifier: string): boolean {
 
 export function recordWebhookAttempt(identifier: string): void {
   webhookLimiter.record(identifier);
+}
+
+export function isNoticeDownloadRateLimited(identifier: string): boolean {
+  return noticeDownloadLimiter.isLimited(identifier);
+}
+
+export function recordNoticeDownloadAttempt(identifier: string): void {
+  noticeDownloadLimiter.record(identifier);
 }

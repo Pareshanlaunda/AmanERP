@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { z } from "zod";
 import { dashboardPathForRole } from "@/lib/auth/get-user";
 import {
   isRateLimited,
@@ -12,6 +13,11 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/types/database";
 
+const signInSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(1).max(128),
+});
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
@@ -20,11 +26,16 @@ export async function signOut() {
 
 async function getClientIp(): Promise<string> {
   const hdrs = await headers();
-  // Vercel sets x-forwarded-for; fall back to a generic key
+  // Set by reverse proxy (Hostinger Nginx / Vercel). Trust only when proxy strips client spoofing.
   return hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 }
 
 export async function signIn(email: string, password: string) {
+  const parsed = signInSchema.safeParse({ email: email.trim(), password });
+  if (!parsed.success) {
+    return { success: false as const, error: "Invalid email or password" };
+  }
+
   const ip = await getClientIp();
 
   if (isRateLimited(ip)) {
@@ -37,7 +48,10 @@ export async function signIn(email: string, password: string) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
 
   if (error) {
     recordFailedAttempt(ip);

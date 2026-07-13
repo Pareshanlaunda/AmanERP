@@ -1,6 +1,7 @@
 "use server";
 
 import { requireUserWithRole } from "@/lib/auth/get-user";
+import { assertClientAccess } from "@/lib/auth/client-access";
 import { createClient } from "@/lib/supabase/server";
 import { buildReasonParagraphs } from "@/lib/notices/reason-options";
 import { resolveSigningAdvocate } from "@/lib/notices/resolve-advocate";
@@ -60,54 +61,6 @@ export type NoticeDefaults = {
   lead_id: string | null;
 };
 
-async function assertClientAccess(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  clientId: string,
-  userId: string,
-  role: string
-) {
-  const { data: client, error } = await supabase
-    .from("client_onboardings")
-    .select(
-      "id, client_name, client_id, client_contact_number, client_email, loan_amount, previous_monthly_emi, loan_type, advocate_name, advocate_email, lead_id, submitted_by"
-    )
-    .eq("id", clientId)
-    .single();
-
-  if (error || !client) {
-    return { ok: false as const, error: "Client not found" };
-  }
-
-  if (role === "admin") {
-    return { ok: true as const, client };
-  }
-
-  if (client.submitted_by === userId) {
-    return { ok: true as const, client };
-  }
-
-  if (client.lead_id) {
-    const { data: assignee } = await supabase
-      .from("lead_additional_assignees")
-      .select("employee_id")
-      .eq("lead_id", client.lead_id)
-      .eq("employee_id", userId)
-      .maybeSingle();
-
-    const { data: lead } = await supabase
-      .from("leads")
-      .select("assigned_to")
-      .eq("id", client.lead_id)
-      .maybeSingle();
-
-    if (assignee || lead?.assigned_to === userId) {
-      return { ok: true as const, client };
-    }
-  }
-
-  return { ok: false as const, error: "You do not have access to this client" };
-}
-
 export async function getClientNoticeDefaults(
   clientOnboardingId: string
 ): Promise<ActionResult<NoticeDefaults>> {
@@ -124,7 +77,7 @@ export async function getClientNoticeDefaults(
   const client = access.client;
   const advocate = await resolveSigningAdvocate(supabase, {
     leadId: client.lead_id,
-    fallbackName: client.advocate_name,
+    fallbackName: client.advocate_name ?? "",
     fallbackEmail: client.advocate_email,
   });
 
@@ -151,8 +104,8 @@ export async function getClientNoticeDefaults(
       loan_amount: client.loan_amount,
       previous_monthly_emi: client.previous_monthly_emi ?? null,
       loan_type: client.loan_type,
-      advocate_name: client.advocate_name,
-      advocate_email: client.advocate_email,
+      advocate_name: client.advocate_name ?? "",
+      advocate_email: client.advocate_email ?? "",
       signing_advocate_name: advocate.fullName,
       signing_advocate_email: signingEmail,
       signing_advocate_address: advocate.address,
@@ -187,7 +140,7 @@ export async function saveClientNotice(
   const client = access.client;
   const advocate = await resolveSigningAdvocate(supabase, {
     leadId: client.lead_id,
-    fallbackName: client.advocate_name,
+    fallbackName: client.advocate_name ?? "",
     fallbackEmail: client.advocate_email,
   });
 

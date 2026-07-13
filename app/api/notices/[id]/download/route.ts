@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { assertClientAccess } from "@/lib/auth/client-access";
 import { getUserWithRole } from "@/lib/auth/get-user";
+import {
+  isNoticeDownloadRateLimited,
+  recordNoticeDownloadAttempt,
+} from "@/lib/auth/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import {
   generateNoticeDocx,
@@ -78,7 +84,17 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const downloadKey = `notice-dl:${user.id}`;
+    if (isNoticeDownloadRateLimited(downloadKey)) {
+      return NextResponse.json({ error: "Too many downloads. Try again shortly." }, { status: 429 });
+    }
+
     const { id } = await context.params;
+    const idParsed = z.string().uuid().safeParse(id);
+    if (!idParsed.success) {
+      return NextResponse.json({ error: "Invalid notice id" }, { status: 400 });
+    }
+
     const format = (request.nextUrl.searchParams.get("format") ?? "docx") as Format;
     const inline = request.nextUrl.searchParams.get("inline") === "1";
 
@@ -90,8 +106,8 @@ export async function GET(
     const { data: notice, error } = await supabase
       .from("client_notices")
       .select("*")
-      .eq("id", id)
-      .single();
+      .eq("id", idParsed.data)
+      .maybeSingle();
 
     if (error || !notice) {
       return NextResponse.json(
@@ -100,38 +116,22 @@ export async function GET(
       );
     }
 
-    const { data: client } = await supabase
-      .from("client_onboardings")
-      .select("id, client_name, submitted_by, lead_id")
-      .eq("id", notice.client_onboarding_id)
-      .single();
-
-    if (!client) {
-      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    const access = await assertClientAccess(
+      supabase,
+      notice.client_onboarding_id as string,
+      user.id,
+      user.role
+    );
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: 403 });
     }
 
-    if (user.role !== "admin") {
-      let allowed = client.submitted_by === user.id;
-      if (!allowed && client.lead_id) {
-        const { data: lead } = await supabase
-          .from("leads")
-          .select("assigned_to")
-          .eq("id", client.lead_id)
-          .maybeSingle();
-        const { data: extra } = await supabase
-          .from("lead_additional_assignees")
-          .select("employee_id")
-          .eq("lead_id", client.lead_id)
-          .eq("employee_id", user.id)
-          .maybeSingle();
-        allowed = lead?.assigned_to === user.id || Boolean(extra);
-      }
-      if (!allowed) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
+    recordNoticeDownloadAttempt(downloadKey);
 
-    const merge = toMergeInput(notice as Record<string, unknown>, client.client_name);
+    const merge = toMergeInput(
+      notice as Record<string, unknown>,
+      access.client.client_name
+    );
     const safeName = String(notice.notice_no).replace(/[^\w.-]+/g, "_") || "notice";
 
     if (format === "docx") {

@@ -1,0 +1,3 @@
+# Internal ERP — do not index
+User-agent: *
+Disallow: /

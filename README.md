@@ -150,22 +150,20 @@ After changing env vars on Vercel, click **Redeploy** on the latest deployment.
 
 | Piece | Where | Notes |
 |-------|--------|------|
-| App + webhook API | **Vercel** (Hobby free → Pro when limits hit) | Built for Next.js |
-| Database + Auth + RLS | **Supabase** (Free → Pro for backups/size) | Not on Vercel |
-| Domain / email | **Hostinger** (optional) | Point DNS at Vercel — do **not** run Next.js on Hostinger shared hosting |
+| App | **Hostinger Node/VPS** or Vercel | Next.js needs Node runtime |
+| Database + Auth + RLS | **Supabase** | Not on the app host |
+| Domain / SSL | **Hostinger** | HTTPS in front of Node |
 
-**Phase 0 (now):** Vercel Hobby + Supabase Free + `BOTBIZ_WEBHOOK_SECRET` on Vercel.
+**Phase 0:** Hostinger Node + Supabase. Leads via Botbiz webhook (`BOTBIZ_WEBHOOK_SECRET`) + optional chat API.
 
-**Phase 1:** Vercel Pro / Supabase Pro when you need backups or higher traffic.
+**Phase 1:** Supabase Pro when you need backups / higher traffic.
 
-**Phase 2:** Webhook queue, Upstash rate limits, Sentry, Cloudflare WAF when volume grows.
-
-Optional first-admin lock: set `SETUP_TOKEN` in env before anyone hits `/setup`.
+**Phase 2:** Redis rate limits, Sentry, Cloudflare WAF when volume grows.
 
 ## CLI scripts (local only)
 
 ```powershell
 npm run migrate              # Apply SQL migrations
 npm run backfill-profiles    # Fix missing profile rows after auth users exist
-npm run create-admin         # Legacy — prefer /admin/users or /setup
+npm run create-admin         # Prefer /admin/users when logged in as admin
 ```

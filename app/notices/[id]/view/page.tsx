@@ -1,3 +1,6 @@
+import { notFound } from "next/navigation";
+import { z } from "zod";
+import { assertClientAccess } from "@/lib/auth/client-access";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 
@@ -6,26 +9,31 @@ type PageProps = {
 };
 
 export default async function NoticeViewPage({ params }: PageProps) {
-  await requireUserWithRole(["admin", "employee"]);
+  const user = await requireUserWithRole(["admin", "employee"]);
   const { id } = await params;
+  const idParsed = z.string().uuid().safeParse(id);
+  if (!idParsed.success) notFound();
+
   const supabase = await createClient();
 
   const { data: notice } = await supabase
     .from("client_notices")
     .select("id, notice_no, client_onboarding_id")
-    .eq("id", id)
+    .eq("id", idParsed.data)
     .maybeSingle();
 
-  if (!notice) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-6 text-muted-foreground">
-        Notice not found.
-      </main>
-    );
-  }
+  if (!notice) notFound();
 
-  const pdfUrl = `/api/notices/${id}/download?format=pdf&inline=1`;
-  const docxUrl = `/api/notices/${id}/download?format=docx`;
+  const access = await assertClientAccess(
+    supabase,
+    notice.client_onboarding_id as string,
+    user.id,
+    user.role
+  );
+  if (!access.ok) notFound();
+
+  const pdfUrl = `/api/notices/${idParsed.data}/download?format=pdf&inline=1`;
+  const docxUrl = `/api/notices/${idParsed.data}/download?format=docx`;
 
   return (
     <div className="flex h-screen flex-col bg-background">

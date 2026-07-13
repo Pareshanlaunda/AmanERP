@@ -35,7 +35,6 @@ export default async function EmployeeDashboardPage() {
       .select(
         "id, client_id, client_name, client_email, client_contact_number, loan_amount, advocate_name, created_at, submitted_by, lead_id"
       )
-      .eq("submitted_by", current.id)
       .order("created_at", { ascending: false })
       .limit(100),
   ]);

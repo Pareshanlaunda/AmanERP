@@ -35,6 +35,11 @@ export function EmployeeDashboardContent({
     setNoticeIds(noticeSource);
   }, [noticeSource]);
 
+  const assignedLeadIds = useMemo(
+    () => new Set(leads.map((lead) => lead.id)),
+    [leads]
+  );
+
   const includeRow = useCallback(
     (lead: Lead) => isActiveEmployeeLead(lead, userId),
     [userId]
@@ -44,6 +49,7 @@ export function EmployeeDashboardContent({
     table: "leads",
     initialRows: leads,
     channelName: `leads:employee-dashboard:${userId}`,
+    // No assigned_to filter: additional assignees must receive updates; RLS gates payloads.
     sortBy: "assigned_at",
     sortDescending: true,
     includeRow,
@@ -55,15 +61,17 @@ export function EmployeeDashboardContent({
   );
 
   const includeClient = useCallback(
-    (client: ClientOnboarding) => client.submitted_by === userId,
-    [userId]
+    (client: ClientOnboarding) =>
+      client.submitted_by === userId ||
+      (Boolean(client.lead_id) && assignedLeadIds.has(client.lead_id as string)),
+    [userId, assignedLeadIds]
   );
 
   const liveClients = useRealtimeRows({
     table: "client_onboardings",
     initialRows: clients,
     channelName: `clients:employee:${userId}`,
-    filter: `submitted_by=eq.${userId}`,
+    // No single-column filter: assignees need lead-linked clients; RLS gates payloads.
     sortBy: "created_at",
     sortDescending: true,
     includeRow: includeClient,
@@ -100,7 +108,7 @@ export function EmployeeDashboardContent({
         <div>
           <h2 className="section-title">My clients</h2>
           <p className="section-subtitle">
-            {filteredClients.length} of {liveClients.length} onboarded clients
+            {filteredClients.length} of {liveClients.length} clients (yours + assigned leads)
           </p>
         </div>
         <SearchBar
