@@ -1,11 +1,42 @@
 import { createHash } from "crypto";
 import { extractBotbizLeadFields } from "@/lib/botbiz/extract-lead-fields";
 import { resolveWhatsAppLeadNotes } from "@/lib/leads/lead-notes-display";
-import { phonesMatch } from "@/lib/botbiz/normalize-phone";
+import { normalizePhone, phonesMatch } from "@/lib/botbiz/normalize-phone";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Lead } from "@/lib/types/database";
 
-const ACTIVE_STATUSES = ["new", "assigned", "in_progress", "successful"] as const;
+/** Prefer open pipeline leads when several match the same phone. */
+const STATUS_RANK: Record<string, number> = {
+  new: 0,
+  assigned: 1,
+  in_progress: 2,
+  successful: 3,
+  converted: 4,
+  lost: 5,
+};
+
+function phoneFromSubscriberId(subscriberId: string | null | undefined): string | null {
+  if (!subscriberId) return null;
+  const match = String(subscriberId).match(/(\d{10,15})/);
+  return match ? normalizePhone(match[1]) : null;
+}
+
+function resolveContactPhone(
+  fields: NonNullable<ReturnType<typeof extractBotbizLeadFields>>
+): string | null {
+  return normalizePhone(fields.client_phone) ?? phoneFromSubscriberId(fields.botbiz_subscriber_id);
+}
+
+function pickBestLead(matches: Lead[]): Lead {
+  return [...matches].sort((a, b) => {
+    const rankA = STATUS_RANK[a.status] ?? 50;
+    const rankB = STATUS_RANK[b.status] ?? 50;
+    if (rankA !== rankB) return rankA - rankB;
+    const aAt = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bAt = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bAt - aAt;
+  })[0]!;
+}
 
 async function getWhatsAppSystemUserId(): Promise<string> {
   const configured = process.env.WHATSAPP_SYSTEM_USER_ID?.trim();
@@ -59,46 +90,59 @@ async function notifyAdmins(
   );
 }
 
+/**
+ * One person / one WhatsApp number → one lead.
+ * Match by phone (any status) or subscriber id — never insert a second row for repeat messages.
+ */
 async function findExistingLead(
   fields: NonNullable<ReturnType<typeof extractBotbizLeadFields>>
 ): Promise<Lead | null> {
   const supabase = createAdminClient();
+  const phone = resolveContactPhone(fields);
 
-  if (fields.botbiz_subscriber_id) {
-    const { data } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("botbiz_subscriber_id", fields.botbiz_subscriber_id)
-      .in("status", ACTIVE_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) return data as Lead;
-  }
+  // Broad fetch: small team ERP; phone formats vary so we match in app.
+  const { data: candidates } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("source", "whatsapp")
+    .order("created_at", { ascending: false })
+    .limit(500);
 
-  if (fields.client_phone) {
-    const { data: candidates } = await supabase
-      .from("leads")
-      .select("*")
-      .eq("source", "whatsapp")
-      .in("status", ACTIVE_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(20);
+  const rows = (candidates ?? []) as Lead[];
+  if (!rows.length) return null;
 
-    const match = (candidates as Lead[] | null)?.find((lead) =>
-      phonesMatch(lead.client_phone, fields.client_phone)
-    );
-    if (match) return match;
-  }
+  const matches = rows.filter((lead) => {
+    if (phone) {
+      if (phonesMatch(lead.client_phone, phone)) return true;
+      if (phonesMatch(phoneFromSubscriberId(lead.botbiz_subscriber_id), phone)) return true;
+    }
+    if (
+      fields.botbiz_subscriber_id &&
+      lead.botbiz_subscriber_id &&
+      lead.botbiz_subscriber_id === fields.botbiz_subscriber_id
+    ) {
+      return true;
+    }
+    // Same WhatsApp identity, different id string shapes (webhook vs sync)
+    if (fields.botbiz_subscriber_id && lead.botbiz_subscriber_id) {
+      const a = phoneFromSubscriberId(fields.botbiz_subscriber_id);
+      const b = phoneFromSubscriberId(lead.botbiz_subscriber_id);
+      if (a && b && phonesMatch(a, b)) return true;
+    }
+    return false;
+  });
 
-  return null;
+  if (!matches.length) return null;
+  return pickBestLead(matches);
 }
 
 export type CreateWhatsAppLeadResult =
   | { success: true; lead_id: string; created: boolean; updated: boolean }
   | { success: false; error: string };
 
-export async function reprocessWhatsAppLeadFromMetadata(leadId: string): Promise<CreateWhatsAppLeadResult> {
+export async function reprocessWhatsAppLeadFromMetadata(
+  leadId: string
+): Promise<CreateWhatsAppLeadResult> {
   const supabase = createAdminClient();
   const { data: lead, error } = await supabase
     .from("leads")
@@ -125,13 +169,14 @@ export async function createWhatsAppLeadFromPayload(
     };
   }
 
+  const contactPhone = resolveContactPhone(fields);
   const idempotencyKey = createHash("sha256")
     .update(JSON.stringify(payload))
     .digest("hex");
 
   const supabase = createAdminClient();
 
-  // 1. Idempotency check: did we already process this exact payload?
+  // Exact same webhook body already applied
   const { data: duplicate } = await supabase
     .from("leads")
     .select("id")
@@ -139,14 +184,13 @@ export async function createWhatsAppLeadFromPayload(
     .maybeSingle();
 
   if (duplicate) {
-    console.log(`[botbiz webhook] Ignored duplicate payload for lead ${duplicate.id}`);
     return { success: true, lead_id: duplicate.id, created: false, updated: false };
   }
 
   const createdBy = await getWhatsAppSystemUserId();
   const existing = await findExistingLead(fields);
 
-  // If this is an early-contact ping and we already have a fuller lead, keep the richer data
+  // Repeat early pings (POSTBACK / sync) on a lead that already has form data — touch only
   const existingLooksComplete =
     existing &&
     existing.client_name &&
@@ -155,19 +199,29 @@ export async function createWhatsAppLeadFromPayload(
       existing.personal_loan_amount_range != null ||
       (existing.whatsapp_slot_answers?.length ?? 0) > 0);
 
-  if (fields.is_early_contact && existingLooksComplete) {
-    // Still refresh subscriber/phone/language if missing, but don't wipe form data
+  if (fields.is_early_contact && existing) {
     const lightPatch: Record<string, unknown> = {
       webhook_idempotency_key: idempotencyKey,
       updated_at: new Date().toISOString(),
     };
-    if (!existing.botbiz_subscriber_id && fields.botbiz_subscriber_id) {
+    if (contactPhone && !existing.client_phone) {
+      lightPatch.client_phone = contactPhone;
+    } else if (contactPhone) {
+      lightPatch.client_phone = contactPhone;
+    }
+    if (fields.botbiz_subscriber_id && !existing.botbiz_subscriber_id) {
       lightPatch.botbiz_subscriber_id = fields.botbiz_subscriber_id;
     }
-    if (!existing.client_phone && fields.client_phone) {
-      lightPatch.client_phone = fields.client_phone;
+    if (fields.preferred_language) {
+      lightPatch.preferred_language = fields.preferred_language;
     }
+    // Keep richer name / form fields when early ping repeats
+    if (!existingLooksComplete && fields.client_name && !/^WhatsApp\s/i.test(fields.client_name)) {
+      lightPatch.client_name = fields.client_name;
+    }
+
     await supabase.from("leads").update(lightPatch).eq("id", existing.id);
+    // No admin spam on every message / language tap
     return { success: true, lead_id: existing.id, created: false, updated: false };
   }
 
@@ -178,7 +232,7 @@ export async function createWhatsAppLeadFromPayload(
 
   const leadPatch = {
     client_name: mergedName,
-    client_phone: fields.client_phone ?? existing?.client_phone ?? null,
+    client_phone: contactPhone ?? existing?.client_phone ?? null,
     client_alternate_phone: fields.client_alternate_phone ?? existing?.client_alternate_phone ?? null,
     client_email: fields.client_email ?? existing?.client_email ?? null,
     loan_amount: fields.loan_amount ?? existing?.loan_amount ?? null,
@@ -212,7 +266,7 @@ export async function createWhatsAppLeadFromPayload(
 
     if (error) return { success: false, error: error.message };
 
-    // Only notify admins when form details arrive (upgrade), not on every early postback
+    // Notify only when form details arrive (upgrade), not every message
     if (!fields.is_early_contact) {
       await notifyAdmins(data, { isUpdate: true, isEarlyContact: false });
     }
@@ -230,7 +284,6 @@ export async function createWhatsAppLeadFromPayload(
     .single();
 
   if (error) {
-    // Concurrent duplicate insert: unique on webhook_idempotency_key
     if (error.code === "23505" && error.message.includes("webhook_idempotency_key")) {
       const { data: existingByKey } = await supabase
         .from("leads")
@@ -240,6 +293,15 @@ export async function createWhatsAppLeadFromPayload(
       if (existingByKey) {
         return { success: true, lead_id: existingByKey.id, created: false, updated: false };
       }
+    }
+    // Race: another request inserted same phone — re-find and update
+    const raced = await findExistingLead(fields);
+    if (raced) {
+      await supabase
+        .from("leads")
+        .update({ ...leadPatch, updated_at: new Date().toISOString() })
+        .eq("id", raced.id);
+      return { success: true, lead_id: raced.id, created: false, updated: true };
     }
     return { success: false, error: error.message };
   }

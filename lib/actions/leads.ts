@@ -1,19 +1,17 @@
 "use server";
 
+import { z } from "zod";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 import {
-  revalidateAfterLeadCreated,
   revalidateEmployeeDetail,
   revalidateLeadMutation,
 } from "@/lib/revalidate";
 import {
   addLeadUpdateSchema,
   assignLeadSchema,
-  createLeadSchema,
   type AddLeadUpdateInput,
   type AssignLeadInput,
-  type CreateLeadInput,
 } from "@/lib/validations/leads";
 import {
   formatOutcomeSummary,
@@ -92,77 +90,6 @@ async function getLeadForAssignee<T extends { assigned_to?: string | null }>(
   if (additional.includes(userId)) return row;
 
   return null;
-}
-
-export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
-  const user = await requireUserWithRole(["admin"]);
-  const parsed = createLeadSchema.safeParse(data);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
-  }
-
-  const supabase = await createClient();
-  const assignedTo = parsed.data.assigned_to ?? null;
-  const assignmentComment = parsed.data.assignment_comment?.trim() || null;
-  const isAssigned = !!assignedTo;
-  const additionalIds = isAssigned
-    ? normalizeAdditionalAssigneeIds(assignedTo, parsed.data.additional_assignee_ids)
-    : [];
-
-  const { data: lead, error } = await supabase
-    .from("leads")
-    .insert({
-      client_name: parsed.data.client_name.trim(),
-      client_phone: parsed.data.client_phone?.trim() || null,
-      client_alternate_phone: parsed.data.client_alternate_phone?.trim() || null,
-      client_email: parsed.data.client_email?.trim() || null,
-      loan_amount: parsed.data.loan_amount ?? null,
-      personal_loan_amount_range: parsed.data.personal_loan_amount_range?.trim() || null,
-      credit_card_amount_range: parsed.data.credit_card_amount_range?.trim() || null,
-      loan_type: parsed.data.loan_type ?? null,
-      harassment_faced: parsed.data.harassment_faced ?? null,
-      notes: parsed.data.notes?.trim() || null,
-      source: "manual",
-      status: isAssigned ? "assigned" : "new",
-      created_by: user.id,
-      assigned_to: assignedTo,
-      assigned_at: isAssigned ? new Date().toISOString() : null,
-      assignment_comment: isAssigned ? assignmentComment : null,
-    })
-    .select("id, client_name")
-    .single();
-
-  if (error) return { success: false, error: error.message };
-
-  if (isAssigned && lead && assignedTo) {
-    const { error: additionalError } = await replaceAdditionalAssignees(supabase, {
-      leadId: lead.id,
-      employeeIds: additionalIds,
-      assignedBy: user.id,
-    });
-    if (additionalError) return { success: false, error: additionalError };
-
-    await notifyAssignees(supabase, {
-      userIds: [assignedTo],
-      clientName: lead.client_name,
-      leadId: lead.id,
-      assignmentComment,
-    });
-    if (additionalIds.length > 0) {
-      await notifyAssignees(supabase, {
-        userIds: additionalIds,
-        clientName: lead.client_name,
-        leadId: lead.id,
-        assignmentComment,
-        additional: true,
-      });
-    }
-    revalidateAfterLeadCreated({ assigned: true });
-  } else {
-    revalidateAfterLeadCreated();
-  }
-
-  return { success: true };
 }
 
 export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
@@ -307,11 +234,16 @@ export async function addLeadUpdate(data: AddLeadUpdateInput): Promise<ActionRes
 
 export async function markLeadInProgress(leadId: string): Promise<ActionResult> {
   const user = await requireUserWithRole(["employee"]);
+  const idParsed = z.string().uuid().safeParse(leadId);
+  if (!idParsed.success) {
+    return { success: false, error: "Invalid lead id" };
+  }
+
   const supabase = await createClient();
 
   const lead = await getLeadForAssignee<{ id: string; status: string; assigned_to: string | null }>(
     supabase,
-    leadId,
+    idParsed.data,
     user.id,
     "id, status, assigned_to"
   );
@@ -327,18 +259,18 @@ export async function markLeadInProgress(leadId: string): Promise<ActionResult> 
   const { error } = await supabase
     .from("leads")
     .update({ status: "in_progress", updated_at: new Date().toISOString() })
-    .eq("id", leadId);
+    .eq("id", idParsed.data);
 
   if (error) return { success: false, error: error.message };
 
   await supabase.from("lead_updates").insert({
-    lead_id: leadId,
+    lead_id: idParsed.data,
     updated_by: user.id,
     note: "Started working on this lead",
     status: "in_progress",
   });
 
-  revalidateLeadMutation(leadId);
+  revalidateLeadMutation(idParsed.data);
   return { success: true };
 }
 
@@ -347,6 +279,11 @@ export async function markLeadSuccessful(
   outcome?: Pick<LeadOutcomeInput, "category" | "reason" | "notes">
 ): Promise<ActionResult> {
   const user = await requireUserWithRole(["employee"]);
+  const idParsed = z.string().uuid().safeParse(leadId);
+  if (!idParsed.success) {
+    return { success: false, error: "Invalid lead id" };
+  }
+
   const supabase = await createClient();
 
   const lead = await getLeadForAssignee<{
@@ -358,7 +295,7 @@ export async function markLeadSuccessful(
     assigned_to: string | null;
   }>(
     supabase,
-    leadId,
+    idParsed.data,
     user.id,
     "id, status, client_name, created_by, onboarding_record_id, assigned_to"
   );
@@ -384,7 +321,7 @@ export async function markLeadSuccessful(
       latest_outcome_reason: outcome?.reason ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", leadId);
+    .eq("id", idParsed.data);
 
   if (error) return { success: false, error: error.message };
 
@@ -393,7 +330,7 @@ export async function markLeadSuccessful(
     : "Marked as successful — lead converted to client";
 
   await supabase.from("lead_updates").insert({
-    lead_id: leadId,
+    lead_id: idParsed.data,
     updated_by: user.id,
     note,
     status: "converted",
@@ -406,10 +343,10 @@ export async function markLeadSuccessful(
     type: "lead_converted",
     title: "Lead converted to client",
     body: `${lead.client_name} was successfully onboarded by ${user.profile.full_name ?? user.email}`,
-    lead_id: leadId,
+    lead_id: idParsed.data,
   });
 
-  revalidateLeadMutation(leadId);
+  revalidateLeadMutation(idParsed.data);
   return { success: true };
 }
 
@@ -522,20 +459,4 @@ export async function markLeadLost(data: LeadOutcomeInput): Promise<ActionResult
     return { success: false, error: "Use recordLeadOutcome for this update" };
   }
   return recordLeadOutcome(data);
-}
-
-export async function notifyLeadConverted(
-  leadId: string,
-  clientName: string,
-  employeeName: string,
-  adminUserId: string
-) {
-  const supabase = await createClient();
-  await createNotification(supabase, {
-    user_id: adminUserId,
-    type: "lead_converted",
-    title: "Lead converted to client",
-    body: `${clientName} was onboarded by ${employeeName}`,
-    lead_id: leadId,
-  });
 }

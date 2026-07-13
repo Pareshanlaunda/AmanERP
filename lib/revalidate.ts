@@ -21,13 +21,6 @@ export function revalidateAfterUserCreated() {
   revalidateAdminLists();
 }
 
-export function revalidateAfterLeadCreated(options?: { assigned?: boolean }) {
-  revalidatePath("/admin/dashboard");
-  if (options?.assigned) {
-    revalidatePath("/employee/dashboard");
-  }
-}
-
 export function revalidateEmployeeDetail(employeeId: string) {
   revalidatePath(`/admin/employees/${employeeId}`);
 }

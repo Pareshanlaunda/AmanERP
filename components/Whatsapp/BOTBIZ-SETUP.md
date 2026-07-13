@@ -46,17 +46,21 @@ Copy the `https://xxxx.ngrok-free.app` URL.
 
 ### 4. Use this webhook URL in Botbiz
 
+Botbiz only accepts a URL (no custom headers). Put the secret in the **path**, not `?secret=`:
+
 ```
-https://YOUR-NGROK-URL/api/webhooks/botbiz?secret=local-test-secret-123
+https://YOUR-NGROK-URL/api/webhooks/botbiz/local-test-secret-123
 ```
 
 Example:
 
 ```
-https://abc123.ngrok-free.app/api/webhooks/botbiz?secret=local-test-secret-123
+https://abc123.ngrok-free.app/api/webhooks/botbiz/local-test-secret-123
 ```
 
-When local testing works, switch the URL to Vercel later — same settings, only URL changes.
+When local testing works, switch the URL to production later — same settings, only host changes.
+
+**Migration:** old `?secret=` URLs need `BOTBIZ_ALLOW_QUERY_SECRET=true` temporarily, then switch to path URL and remove that env.
 
 ---
 
@@ -73,14 +77,16 @@ AMAN ERP Leads
 **Local (ngrok):**
 
 ```
-https://YOUR-NGROK-URL/api/webhooks/botbiz?secret=local-test-secret-123
+https://YOUR-NGROK-URL/api/webhooks/botbiz/local-test-secret-123
 ```
 
-**Production (later):**
+**Production:**
 
 ```
-https://aman-erp-theta.vercel.app/api/webhooks/botbiz?secret=YOUR_PRODUCTION_SECRET
+https://YOUR-HOST/api/webhooks/botbiz/YOUR_PRODUCTION_SECRET
 ```
+
+Secret must be URL-safe (e.g. `openssl rand -hex 32`). No `?secret=` — that leaks in logs/Referer.
 
 ---
 
@@ -94,7 +100,13 @@ https://aman-erp-theta.vercel.app/api/webhooks/botbiz?secret=YOUR_PRODUCTION_SEC
 
 Both **POSTBACK** and **USER INPUT FLOW** should be ON.
 
-**Why POSTBACK?** Botbiz cannot push every free-text chat line. The earliest reliable event is usually the language button (English / Hindi / Marathi). That creates a stub lead (`WhatsApp 91…`) so agents can open chat and follow up while the customer is still filling the form. When Client_Details completes, the same lead is updated with name, loan fields, etc.
+**Why POSTBACK?** Earliest webhook event (language / start button). Creates stub lead (`WhatsApp 91…`) so agents can chat while the form is still open.
+
+**Fallback (code):** Admin dashboard also **pulls recent Botbiz subscribers** (latest message first) and creates leads if the webhook missed them — covers “customer messaged us” and “we messaged them first”. Use **Sync WhatsApp** or just open the dashboard.
+
+When Client_Details completes, the same lead is updated (not duplicated).
+
+**No duplicate leads:** ERP matches by **phone** (and subscriber id). Same person messaging again / tapping language again / sync → **updates the same lead**, never creates a second one.
 
 ---
 
@@ -133,7 +145,7 @@ Both **POSTBACK** and **USER INPUT FLOW** should be ON.
 **Early contact (POSTBACK-style — no form yet):**
 
 ```powershell
-curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret-123" ^
+curl -X POST "http://localhost:3000/api/webhooks/botbiz/local-test-secret-123" ^
   -H "Content-Type: application/json" ^
   -d "{\"subscriber_id\":\"916300251728-390042\",\"phone_number\":\"6300251728\",\"postback_id\":\"English\",\"subscriber_name\":\"\"}"
 ```
@@ -141,7 +153,7 @@ curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret
 **Form complete (USER INPUT FLOW):**
 
 ```powershell
-curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret-123" ^
+curl -X POST "http://localhost:3000/api/webhooks/botbiz/local-test-secret-123" ^
   -H "Content-Type: application/json" ^
   -d "{\"subscriber_id\":\"916300251728-390042\",\"phone_number\":\"6300251728\",\"input_flow_data\":{\"Full Name\":\"Test User\",\"Loan_Type\":\"Unsecured Loans\",\"Personal_Loan_Amount\":\"5-10 Lakhs\",\"Credit_Card_Amount\":\"No Credit Card\",\"Recovery_Harassment\":\"Recovery Calls\"}}"
 ```
@@ -150,11 +162,12 @@ curl -X POST "http://localhost:3000/api/webhooks/botbiz?secret=local-test-secret
 
 ## When moving to production
 
-1. Push code to GitHub → Vercel redeploys
-2. Add `BOTBIZ_WEBHOOK_SECRET` on Vercel (same idea as local)
-3. Edit Botbiz webhook URL → change ngrok URL to `https://aman-erp-theta.vercel.app/api/webhooks/botbiz?secret=...`
-4. Rotate the secret if the URL was ever shared in chat/logs (query-string secrets can leak)
-5. Never enable `BOTBIZ_WEBHOOK_DEBUG` on Vercel production
+1. Push code → Hostinger/Vercel redeploys
+2. Set `BOTBIZ_WEBHOOK_SECRET` (URL-safe; same value as path segment)
+3. Edit Botbiz webhook URL → `https://YOUR-HOST/api/webhooks/botbiz/YOUR_SECRET`
+4. Rotate secret if old `?secret=` URL was ever shared in chat/logs
+5. Never enable `BOTBIZ_WEBHOOK_DEBUG` in production
+6. Do not set `BOTBIZ_ALLOW_QUERY_SECRET` in production once path URL works
 
 Docs: [Botbiz Outbound Webhook](https://dash.botbiz.io/docs/whatsapp/bot-manager/whatsapp-out-bound-webhook)
 

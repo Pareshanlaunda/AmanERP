@@ -346,6 +346,83 @@ export async function sendTemplateMessage(params: {
   };
 }
 
+export type BotbizSubscriber = {
+  subscriberId: string;
+  phone: string;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+/**
+ * Recent WhatsApp contacts from Botbiz (orderBy=1 = latest message first).
+ * Used to create ERP leads when webhook POSTBACK did not fire yet.
+ */
+export async function listSubscribers(params?: {
+  limit?: number;
+  offset?: number;
+  /** 1 = most recent message first */
+  orderBy?: 0 | 1;
+}): Promise<BotbizApiResult<BotbizSubscriber[]>> {
+  const limit = Math.min(Math.max(params?.limit ?? 40, 1), 100);
+  const offset = Math.max(params?.offset ?? 1, 1);
+  const orderBy = params?.orderBy === 0 ? "0" : "1";
+
+  const result = await postForm("/api/v1/whatsapp/subscriber/list", {
+    limit: String(limit),
+    offset: String(offset),
+    orderBy,
+  });
+  if (!result.ok) return result;
+
+  const payload = result.data as { status?: unknown; message?: unknown };
+  if (!isSuccessStatus(payload.status)) {
+    return {
+      ok: false,
+      error: extractErrorMessage(payload, "Failed to list subscribers"),
+    };
+  }
+
+  let rows: unknown[] = [];
+  const message = payload.message;
+  if (Array.isArray(message)) {
+    rows = message;
+  } else if (typeof message === "string") {
+    try {
+      const parsed = JSON.parse(message) as unknown;
+      rows = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      rows = [];
+    }
+  } else if (message && typeof message === "object") {
+    rows = Object.values(message as Record<string, unknown>);
+  }
+
+  const subscribers: BotbizSubscriber[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    const chatId = rec.chat_id ?? rec.phone_number ?? rec.phoneNumber ?? rec.phone;
+    const subId = rec.subscriber_id ?? rec.subscriberId ?? rec.id;
+    if (chatId == null && subId == null) continue;
+    const phone = String(chatId ?? subId).replace(/\D/g, "");
+    if (phone.length < 10) continue;
+    subscribers.push({
+      subscriberId: subId != null ? String(subId) : phone,
+      phone,
+      firstName:
+        typeof rec.first_name === "string" && rec.first_name.trim() && rec.first_name !== "null"
+          ? rec.first_name.trim()
+          : null,
+      lastName:
+        typeof rec.last_name === "string" && rec.last_name.trim() && rec.last_name !== "null"
+          ? rec.last_name.trim()
+          : null,
+    });
+  }
+
+  return { ok: true, data: subscribers };
+}
+
 export function isOutside24HourWindowError(message: string): boolean {
   return /24\s*hour|template message/i.test(message);
 }

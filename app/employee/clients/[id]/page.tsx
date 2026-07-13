@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { assertClientAccess } from "@/lib/auth/client-access";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
@@ -21,12 +22,14 @@ export default async function EmployeeClientDetailPage({
   const supabase = await createClient();
   const notifications = await getNotifications();
 
+  const access = await assertClientAccess(supabase, id, current.id, current.role);
+  if (!access.ok) notFound();
+
   const { data: client } = await supabase
     .from("client_onboardings")
     .select("*")
     .eq("id", id)
-    .eq("submitted_by", current.id)
-    .single();
+    .maybeSingle();
 
   if (!client) notFound();
 

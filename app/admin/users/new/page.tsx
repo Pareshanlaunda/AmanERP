@@ -36,7 +36,7 @@ export default async function AdminCreateUserPage() {
           </Link>
         </Button>
 
-        <CreateUserForm mode="admin" />
+        <CreateUserForm />
       </main>
     </div>
   );

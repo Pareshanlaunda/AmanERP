@@ -1,17 +1,31 @@
 "use server";
 
+import { z } from "zod";
 import { getUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadComment } from "@/lib/types/database";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
+const leadIdSchema = z.string().uuid();
+const commentMessageSchema = z
+  .string()
+  .trim()
+  .min(1, "Comment cannot be empty")
+  .max(2000, "Comment is too long");
+
 export async function getLeadComments(leadId: string): Promise<LeadComment[]> {
+  const user = await getUserWithRole();
+  if (!user) return [];
+
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return [];
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("lead_comments")
     .select("*")
-    .eq("lead_id", leadId)
+    .eq("lead_id", parsed.data)
     .order("created_at", { ascending: true })
     .limit(50);
 
@@ -22,11 +36,14 @@ export async function hasUnreadComments(leadId: string): Promise<boolean> {
   const user = await getUserWithRole();
   if (!user) return false;
 
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return false;
+
   const supabase = await createClient();
   const { data: comments } = await supabase
     .from("lead_comments")
     .select("created_at, author_id")
-    .eq("lead_id", leadId)
+    .eq("lead_id", parsed.data)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -36,7 +53,7 @@ export async function hasUnreadComments(leadId: string): Promise<boolean> {
   const { data: readState } = await supabase
     .from("lead_comment_reads")
     .select("last_read_at")
-    .eq("lead_id", leadId)
+    .eq("lead_id", parsed.data)
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -48,14 +65,19 @@ export async function addLeadComment(leadId: string, message: string): Promise<A
   const user = await getUserWithRole();
   if (!user) return { success: false, error: "Unauthorized" };
 
-  const trimmed = message.trim();
-  if (!trimmed) return { success: false, error: "Comment cannot be empty" };
+  const idParsed = leadIdSchema.safeParse(leadId);
+  if (!idParsed.success) return { success: false, error: "Invalid lead id" };
+
+  const msgParsed = commentMessageSchema.safeParse(message);
+  if (!msgParsed.success) {
+    return { success: false, error: msgParsed.error.errors[0]?.message ?? "Invalid comment" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("lead_comments").insert({
-    lead_id: leadId,
+    lead_id: idParsed.data,
     author_id: user.id,
-    message: trimmed,
+    message: msgParsed.data,
   });
 
   if (error) return { success: false, error: error.message };
@@ -67,9 +89,12 @@ export async function markCommentsRead(leadId: string) {
   const user = await getUserWithRole();
   if (!user) return;
 
+  const parsed = leadIdSchema.safeParse(leadId);
+  if (!parsed.success) return;
+
   const supabase = await createClient();
   await supabase.from("lead_comment_reads").upsert({
-    lead_id: leadId,
+    lead_id: parsed.data,
     user_id: user.id,
     last_read_at: new Date().toISOString(),
   });

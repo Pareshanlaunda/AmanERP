@@ -26,6 +26,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: BRAND_NAME,
   description: BRAND_TAGLINE,
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
