@@ -21,7 +21,7 @@ const signInSchema = z.object({
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/login");
+  redirect("/");
 }
 
 async function getClientIp(): Promise<string> {
@@ -71,5 +71,11 @@ export async function signIn(email: string, password: string) {
     return { success: false as const, error: "No profile found for this account. Contact admin." };
   }
 
-  redirect(dashboardPathForRole(profile.role as UserRole));
+  // Return path for client navigation. Avoid redirect() here — on Hostinger
+  // Next's post-action redirect fetch often fails (runtime: "failed to get
+  // redirect response TypeError: fetch failed") and leaves login hung.
+  return {
+    success: true as const,
+    redirectTo: dashboardPathForRole(profile.role as UserRole),
+  };
 }

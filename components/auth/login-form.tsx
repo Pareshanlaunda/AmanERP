@@ -20,20 +20,21 @@ export function LoginForm() {
     startTransition(async () => {
       try {
         const result = await signIn(email, password);
-        if (result && !result.success) {
-          setError(result.error);
+        if (!result) {
+          setError("Sign in failed. Try again.");
+          return;
         }
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        // Full navigation so session cookies from the action are always sent.
+        window.location.assign(result.redirectTo);
       } catch (err) {
-        const digest =
-          typeof err === "object" && err && "digest" in err
-            ? String((err as { digest?: string }).digest)
-            : "";
-        if (digest.startsWith("NEXT_REDIRECT")) throw err;
-
         const message = err instanceof Error ? err.message : "Sign in failed";
         setError(
           /failed to fetch|networkerror|load failed/i.test(message)
-            ? "Cannot reach the server. Confirm npm run dev is running on http://localhost:3000, hard-refresh, and try again."
+            ? "Cannot reach the server. Check your connection and try again."
             : message
         );
       }

@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/login");
+  const isAuthRoute = pathname === "/" || pathname.startsWith("/login");
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/onboarding") ||
@@ -52,7 +52,7 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

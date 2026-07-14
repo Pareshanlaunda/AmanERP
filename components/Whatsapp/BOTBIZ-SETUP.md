@@ -80,13 +80,21 @@ AMAN ERP Leads
 https://YOUR-NGROK-URL/api/webhooks/botbiz/local-test-secret-123
 ```
 
-**Production:**
+**Production (Hostinger — debtfreelawyer.in):**
 
 ```
-https://YOUR-HOST/api/webhooks/botbiz/YOUR_PRODUCTION_SECRET
+https://debtfreelawyer.in/api/webhooks/botbiz/YOUR_NEW_SECRET
 ```
 
-Secret must be URL-safe (e.g. `openssl rand -hex 32`). No `?secret=` — that leaks in logs/Referer.
+Replace `YOUR_NEW_SECRET` with the same value as Hostinger env `BOTBIZ_WEBHOOK_SECRET`.
+
+Secret must be URL-safe (e.g. `openssl rand -hex 32`). Prefer **path** secret (above). Do **not** use `?secret=` — that leaks in logs/Referer.
+
+**Old Vercel (do not use):**
+
+```
+https://aman-erp-theta.vercel.app/api/webhooks/botbiz?secret=...
+```
 
 ---
 
@@ -160,14 +168,15 @@ curl -X POST "http://localhost:3000/api/webhooks/botbiz/local-test-secret-123" ^
 
 ---
 
-## When moving to production
+## When moving to production (Hostinger)
 
-1. Push code → Hostinger/Vercel redeploys
-2. Set `BOTBIZ_WEBHOOK_SECRET` (URL-safe; same value as path segment)
-3. Edit Botbiz webhook URL → `https://YOUR-HOST/api/webhooks/botbiz/YOUR_SECRET`
-4. Rotate secret if old `?secret=` URL was ever shared in chat/logs
+1. Redeploy on Hostinger after setting env vars
+2. Set `BOTBIZ_WEBHOOK_SECRET` on Hostinger (URL-safe; same value as path segment)
+3. Edit Botbiz outbound webhook URL → `https://debtfreelawyer.in/api/webhooks/botbiz/YOUR_NEW_SECRET`
+4. Rotate secret if old Vercel `?secret=` URL was ever shared in chat/logs
 5. Never enable `BOTBIZ_WEBHOOK_DEBUG` in production
 6. Do not set `BOTBIZ_ALLOW_QUERY_SECRET` in production once path URL works
+7. Supabase Auth Site URL / Redirect URLs → `https://debtfreelawyer.in`
 
 Docs: [Botbiz Outbound Webhook](https://dash.botbiz.io/docs/whatsapp/bot-manager/whatsapp-out-bound-webhook)
 
@@ -177,7 +186,7 @@ Docs: [Botbiz Outbound Webhook](https://dash.botbiz.io/docs/whatsapp/bot-manager
 
 ERP can show the Botbiz conversation on a WhatsApp lead and send session text replies.
 
-### Env vars (`.env.local` and Vercel)
+### Env vars (`.env.local` and Hostinger)
 
 ```env
 BOTBIZ_API_KEY=your-api-token-from-botbiz-developer-console

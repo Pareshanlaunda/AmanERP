@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { LoginScreen } from "@/components/auth/login-screen";
 import { getUserWithRole, dashboardPathForRole } from "@/lib/auth/get-user";
 
 export default async function HomePage() {
@@ -8,6 +9,5 @@ export default async function HomePage() {
     redirect(dashboardPathForRole(current.role));
   }
 
-  // Unauthenticated users always go to login (bootstrap /setup removed).
-  redirect("/login");
+  return <LoginScreen />;
 }

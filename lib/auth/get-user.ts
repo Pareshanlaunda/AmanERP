@@ -40,7 +40,7 @@ export function dashboardPathForRole(role: UserRole): string {
 export async function requireUserWithRole(allowedRoles?: UserRole[]) {
   const current = await getUserWithRole();
   if (!current) {
-    redirect("/login");
+    redirect("/");
   }
   if (allowedRoles && !allowedRoles.includes(current.role)) {
     redirect(dashboardPathForRole(current.role));
