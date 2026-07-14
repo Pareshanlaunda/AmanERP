@@ -19,7 +19,7 @@ export default async function NewOnboardingPage({
   searchParams: Promise<{ leadId?: string }>;
 }) {
   const current = await getUserWithRole();
-  if (!current) redirect("/login");
+  if (!current) redirect("/");
 
   const { leadId } = await searchParams;
   const supabase = await createClient();

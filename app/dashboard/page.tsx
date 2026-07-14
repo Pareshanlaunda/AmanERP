@@ -5,7 +5,7 @@ export default async function DashboardRedirectPage() {
   const current = await getUserWithRole();
 
   if (!current) {
-    redirect("/login");
+    redirect("/");
   }
 
   redirect(dashboardPathForRole(current.role));
