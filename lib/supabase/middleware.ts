@@ -7,7 +7,9 @@ async function getProfileRole(
   userId: string
 ): Promise<UserRole | null> {
   const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
-  return (data?.role as UserRole) ?? null;
+  const role = data?.role;
+  if (role === "admin" || role === "employee") return role;
+  return null;
 }
 
 export async function updateSession(request: NextRequest) {
@@ -58,8 +60,19 @@ export async function updateSession(request: NextRequest) {
 
   if (user) {
     const role = await getProfileRole(supabase, user.id);
-    const dashboard =
-      role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
+
+    // Auth user without usable profile → sign out (avoids / ↔ /employee loop).
+    if (!role) {
+      await supabase.auth.signOut();
+      if (!isAuthRoute) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        return NextResponse.redirect(url);
+      }
+      return supabaseResponse;
+    }
+
+    const dashboard = role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
 
     if (isAuthRoute || pathname.startsWith("/setup")) {
       const url = request.nextUrl.clone();

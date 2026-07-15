@@ -10,7 +10,10 @@ export async function listAllAuthUsers(): Promise<User[]> {
 
   while (true) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: AUTH_USERS_PAGE_SIZE });
-    if (error) throw error;
+    if (error) {
+      console.error("[auth-users] listUsers failed", error.message);
+      throw new Error("Unable to load users");
+    }
 
     const batch = data?.users ?? [];
     users.push(...batch);

@@ -1,9 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { sendAdvocateEmail } from "@/lib/email";
 import { getUserWithRole } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { publicActionError } from "@/lib/errors/public-error";
 import {
   onboardingFormSchema,
   toDbPayload,
@@ -14,7 +17,6 @@ import {
   listAdditionalAssigneeIds,
   replaceAdditionalAssignees,
 } from "@/lib/leads/assignees";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export type SubmitOnboardingResult =
   | { success: true }
@@ -35,22 +37,58 @@ export async function submitOnboarding(
     return { success: false, error: "You must be logged in to submit" };
   }
 
+  // Employees must attach to a lead (blocks orphan client_onboardings).
+  if (current.role === "employee" && !leadId) {
+    return { success: false, error: "Onboarding requires a lead" };
+  }
+
+  const admin = createAdminClient();
+  const { data: advocateProfile, error: advocateError } = await admin
+    .from("profiles")
+    .select("id, role, employee_type")
+    .eq("id", parsed.data.advocate_id)
+    .maybeSingle();
+
+  if (advocateError) {
+    return {
+      success: false,
+      error: publicActionError("Unable to verify advocate", advocateError),
+    };
+  }
+  if (
+    !advocateProfile ||
+    advocateProfile.role !== "employee" ||
+    advocateProfile.employee_type !== "advocate"
+  ) {
+    return { success: false, error: "Selected advocate is invalid" };
+  }
+
   const supabase = await createClient();
+  let leadPrimary: string | null = null;
+  let resolvedLeadId: string | null = null;
 
   if (leadId) {
+    const idParsed = z.string().uuid().safeParse(leadId);
+    if (!idParsed.success) {
+      return { success: false, error: "Invalid lead" };
+    }
+    resolvedLeadId = idParsed.data;
+
     const { data: lead, error: leadError } = await supabase
       .from("leads")
       .select("id, status, assigned_to, onboarding_record_id")
-      .eq("id", leadId)
+      .eq("id", resolvedLeadId)
       .single();
 
     if (leadError || !lead) {
       return { success: false, error: "Lead not found" };
     }
 
-    const isPrimary = lead.assigned_to === current.id;
+    leadPrimary = (lead.assigned_to as string | null) ?? null;
+    const isPrimary = leadPrimary === current.id;
     const isAdditional =
-      !isPrimary && (await listAdditionalAssigneeIds(supabase, leadId)).includes(current.id);
+      !isPrimary &&
+      (await listAdditionalAssigneeIds(supabase, resolvedLeadId)).includes(current.id);
 
     if (!isPrimary && !isAdditional) {
       return { success: false, error: "This lead is not assigned to you" };
@@ -65,65 +103,96 @@ export async function submitOnboarding(
     }
   }
 
+  // RLS insert requires submitted_by = auth.uid(); reassign primary owner after if needed.
   const { data: inserted, error } = await supabase
     .from("client_onboardings")
     .insert({
       ...toDbPayload(parsed.data),
       submitted_by: current.id,
-      lead_id: leadId ?? null,
+      lead_id: resolvedLeadId,
     })
     .select()
     .single();
 
   if (error) {
-    return { success: false, error: error.message };
+    if (error.code === "23505") {
+      return { success: false, error: "Onboarding form already submitted for this lead" };
+    }
+    return { success: false, error: publicActionError("Unable to submit onboarding", error) };
   }
 
-  if (leadId) {
+  if (resolvedLeadId && leadPrimary && leadPrimary !== current.id) {
+    const { error: ownerError } = await admin
+      .from("client_onboardings")
+      .update({ submitted_by: leadPrimary, updated_at: new Date().toISOString() })
+      .eq("id", inserted.id);
+    if (ownerError) {
+      await admin.from("client_onboardings").delete().eq("id", inserted.id);
+      return {
+        success: false,
+        error: publicActionError("Unable to set primary client owner", ownerError),
+      };
+    }
+    inserted.submitted_by = leadPrimary;
+  }
+
+  if (resolvedLeadId) {
     const { error: linkError } = await supabase
       .from("leads")
       .update({
         onboarding_record_id: inserted.id,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", leadId);
+      .eq("id", resolvedLeadId);
 
     if (linkError) {
-      return { success: false, error: linkError.message };
+      await admin.from("client_onboardings").delete().eq("id", inserted.id);
+      return {
+        success: false,
+        error: publicActionError("Unable to link onboarding to lead", linkError),
+      };
     }
 
-    // Assign selected advocate as additional assignee on the lead (for notices / ownership)
-    try {
-      const admin = createAdminClient();
-      const { data: leadRow } = await admin
-        .from("leads")
-        .select("assigned_to")
-        .eq("id", leadId)
-        .single();
-      const existing = await listAdditionalAssigneeIds(admin, leadId);
-      const advocateId = parsed.data.advocate_id;
-      const primary = leadRow?.assigned_to as string | null;
-      const next = [...new Set([...existing, advocateId])].filter((id) => id !== primary);
-      await replaceAdditionalAssignees(admin, {
-        leadId,
-        employeeIds: next,
-        assignedBy: current.id,
-      });
-    } catch (e) {
-      console.error("[submitOnboarding] advocate assign failed", e);
+    const existing = await listAdditionalAssigneeIds(admin, resolvedLeadId);
+    const next = [...new Set([...existing, parsed.data.advocate_id])].filter(
+      (id) => id !== leadPrimary
+    );
+    const { error: assigneeError } = await replaceAdditionalAssignees(admin, {
+      leadId: resolvedLeadId,
+      employeeIds: next,
+      assignedBy: current.id,
+    });
+    if (assigneeError) {
+      console.error("[submitOnboarding] advocate assign failed", assigneeError);
     }
 
-    await supabase.from("lead_updates").insert({
-      lead_id: leadId,
+    const { error: updateTrailError } = await supabase.from("lead_updates").insert({
+      lead_id: resolvedLeadId,
       updated_by: current.id,
-      note: "Client onboarding form submitted — awaiting final success mark",
+      note: assigneeError
+        ? "Client onboarding form submitted — advocate assign failed (fix assignees manually)"
+        : "Client onboarding form submitted — awaiting final success mark",
       status: "in_progress",
     });
+    if (updateTrailError) {
+      console.error("[submitOnboarding] lead_updates insert failed", updateTrailError.message);
+    }
+
+    await sendAdvocateEmail(inserted as ClientOnboarding);
+
+    const qs = new URLSearchParams({ formSubmitted: "1" });
+    if (assigneeError) qs.set("advocateAssignFailed", "1");
+    if (updateTrailError) qs.set("auditTrailFailed", "1");
+    const leadPath =
+      current.role === "admin"
+        ? `/admin/leads/${resolvedLeadId}?${qs}`
+        : `/employee/leads/${resolvedLeadId}?${qs}`;
+    redirect(leadPath);
   }
 
   await sendAdvocateEmail(inserted as ClientOnboarding);
 
-  redirect(leadId ? `/employee/leads/${leadId}?formSubmitted=1` : dashboardRedirect(current.role));
+  redirect(dashboardRedirect(current.role));
 }
 
 function dashboardRedirect(role: string) {

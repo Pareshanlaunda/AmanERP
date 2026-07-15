@@ -41,7 +41,9 @@ export function AssignLeadForm({
   const [isPending, startTransition] = useTransition();
   const [assignedTo, setAssignedTo] = useState(currentAssignee ?? "");
   const [additionalIds, setAdditionalIds] = useState<string[]>(currentAdditionalIds);
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(
+    () => leadLive?.lead.assignment_comment?.trim() ?? ""
+  );
 
   useEffect(() => {
     setAssignedTo(currentAssignee ?? "");
@@ -51,9 +53,17 @@ export function AssignLeadForm({
     setAdditionalIds(currentAdditionalIds);
   }, [currentAdditionalIds]);
 
+  useEffect(() => {
+    if (leadLive?.lead.assignment_comment != null) {
+      setComment(leadLive.lead.assignment_comment);
+    }
+  }, [leadLive?.lead.assignment_comment]);
+
+  const existingComment = leadLive?.lead.assignment_comment?.trim() ?? "";
+  const commentChanged = comment.trim() !== existingComment;
   const primaryChanged = assignedTo !== (currentAssignee ?? "");
   const additionalChanged = !sameIdSet(additionalIds, currentAdditionalIds);
-  const isDirty = primaryChanged || additionalChanged || Boolean(comment.trim());
+  const isDirty = primaryChanged || additionalChanged || commentChanged;
   const hasExisting = Boolean(currentAssignee);
 
   function handlePrimaryChange(id: string) {
@@ -75,12 +85,13 @@ export function AssignLeadForm({
     const previousAssignee = currentAssignee ?? null;
     const previousAdditional = currentAdditionalIds;
     const previousStatus = leadLive?.lead.status;
+    const previousComment = leadLive?.lead.assignment_comment ?? null;
 
     startTransition(async () => {
       leadLive?.setLeadOptimistic({
         assigned_to: assignedTo,
         status: previousStatus === "converted" || previousStatus === "lost" ? previousStatus : "assigned",
-        assignment_comment: comment.trim() || leadLive.lead.assignment_comment,
+        assignment_comment: comment.trim() || previousComment,
         additional_assignee_ids: additionalIds,
       });
 
@@ -88,20 +99,22 @@ export function AssignLeadForm({
         lead_id: leadId,
         assigned_to: assignedTo,
         additional_assignee_ids: additionalIds,
-        assignment_comment: comment.trim() || undefined,
+        // Only send when changed — blank without change means keep existing on server
+        assignment_comment: commentChanged ? comment.trim() : undefined,
       });
 
       if (!result.success) {
         leadLive?.setLeadOptimistic({
           assigned_to: previousAssignee,
           status: previousStatus,
+          assignment_comment: previousComment,
           additional_assignee_ids: previousAdditional,
         });
         toast.error(result.error);
         return;
       }
 
-      setComment("");
+      if (result.warning) toast.warning(result.warning);
       if (primaryChanged && additionalChanged) {
         toast.success("Primary and additional employees updated");
       } else if (additionalChanged && !primaryChanged) {
@@ -160,7 +173,9 @@ export function AssignLeadForm({
           />
 
           <div className="space-y-2">
-            <Label htmlFor="assignment_comment">Additional info for employee (optional)</Label>
+            <Label htmlFor="assignment_comment">
+              Additional info for employee (optional — edit to change; clearing saves empty note)
+            </Label>
             <Textarea
               id="assignment_comment"
               value={comment}

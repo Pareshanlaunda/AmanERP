@@ -2,6 +2,7 @@
 
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { listAllAuthUsers } from "@/lib/queries/auth-users";
 
 export type AdvocateOption = {
   id: string;
@@ -14,19 +15,23 @@ export async function listAdvocateEmployees(): Promise<AdvocateOption[]> {
   await requireUserWithRole(["admin", "employee"]);
   const admin = createAdminClient();
 
-  const { data: profiles, error } = await admin
-    .from("profiles")
-    .select("id, full_name")
-    .eq("role", "employee")
-    .eq("employee_type", "advocate")
-    .order("full_name", { ascending: true });
+  const [{ data: profiles, error }, authUsers] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "employee")
+      .eq("employee_type", "advocate")
+      .order("full_name", { ascending: true }),
+    listAllAuthUsers(),
+  ]);
 
-  if (error || !profiles?.length) return [];
+  if (error) {
+    console.error("[advocates] listAdvocateEmployees failed", error.message);
+    throw new Error("Unable to load advocates");
+  }
+  if (!profiles?.length) return [];
 
-  const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const emailById = new Map(
-    (authData?.users ?? []).map((u) => [u.id, u.email ?? ""])
-  );
+  const emailById = new Map(authUsers.map((u) => [u.id, u.email ?? ""]));
 
   return profiles
     .filter((p) => p.full_name)

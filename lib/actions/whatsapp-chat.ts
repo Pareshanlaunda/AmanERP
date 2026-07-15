@@ -13,6 +13,7 @@ import {
   type ParsedWhatsAppMessage,
 } from "@/lib/botbiz/parse-conversation-message";
 import { getUserWithRole } from "@/lib/auth/get-user";
+import { publicBotbizError } from "@/lib/errors/public-error";
 import { createClient } from "@/lib/supabase/server";
 import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 
@@ -35,9 +36,9 @@ function phoneFromSubscriberId(subscriberId: string | null): string | null {
 }
 
 /**
- * Phones to try for Botbiz chat, in order.
- * Prefer subscriber_id (WhatsApp chat identity) over form-entered client_phone —
- * customers often mistype the mobile in Client_Details (e.g. Sushant …658 vs …648).
+ * Phones to try for Botbiz chat load, in order.
+ * Prefer subscriber_id over form phone (mistyped Client_Details is common).
+ * Send uses resolveSendPhone — never fall back after subscriber (wrong recipient).
  */
 function resolveChatPhoneCandidates(lead: LeadChatRow): string[] {
   const fromSubscriber = phoneFromSubscriberId(lead.botbiz_subscriber_id);
@@ -47,6 +48,11 @@ function resolveChatPhoneCandidates(lead: LeadChatRow): string[] {
     if (phone && !candidates.includes(phone)) candidates.push(phone);
   }
   return candidates;
+}
+
+/** Send target: subscriber phone only when present; else form phone. Never both. */
+function resolveSendPhone(lead: LeadChatRow): string | null {
+  return phoneFromSubscriberId(lead.botbiz_subscriber_id) || normalizePhone(lead.client_phone);
 }
 
 async function loadLeadForChat(
@@ -125,7 +131,7 @@ export async function getLeadWhatsAppConversation(
   }
 
   if (!rawMessages || !rawMessages.ok) {
-    return { success: false, error: lastError };
+    return { success: false, error: publicBotbizError(lastError) };
   }
 
   const messages = parseConversationMessages(rawMessages.data).sort((a, b) => {
@@ -158,27 +164,26 @@ export async function sendLeadWhatsAppMessage(
   const access = await loadLeadForChat(leadId);
   if (!access.success) return access;
 
-  // Prefer the WhatsApp subscriber number so replies land in the real thread
-  // even when the form phone was mistyped.
-  let lastError = "Failed to send message";
-  for (const phone of access.data.phones) {
-    const result = await sendTextMessage({
-      phoneNumber: phone,
-      message: trimmed,
-    });
-    if (result.ok) {
-      return {
-        success: true,
-        data: {
-          waMessageId: result.data.wa_message_id,
-          sentAt: new Date().toISOString(),
-        },
-      };
-    }
-    lastError = result.error;
+  const phone = resolveSendPhone(access.data);
+  if (!phone) {
+    return { success: false, error: "Lead has no phone number to send WhatsApp message" };
   }
 
-  return { success: false, error: lastError };
+  const result = await sendTextMessage({
+    phoneNumber: phone,
+    message: trimmed,
+  });
+  if (!result.ok) {
+    return { success: false, error: publicBotbizError(result.error) };
+  }
+
+  return {
+    success: true,
+    data: {
+      waMessageId: result.data.wa_message_id,
+      sentAt: new Date().toISOString(),
+    },
+  };
 }
 
 export async function listLeadWhatsAppTemplates(
@@ -189,7 +194,7 @@ export async function listLeadWhatsAppTemplates(
 
   const result = await listMessageTemplates();
   if (!result.ok) {
-    return { success: false, error: result.error };
+    return { success: false, error: publicBotbizError(result.error) };
   }
 
   return { success: true, data: { templates: result.data } };
@@ -207,24 +212,25 @@ export async function sendLeadWhatsAppTemplate(
   const access = await loadLeadForChat(leadId);
   if (!access.success) return access;
 
-  let lastError = "Failed to send template";
-  for (const phone of access.data.phones) {
-    const result = await sendTemplateMessage({
-      phoneNumber: phone,
-      templateName: name,
-      templateId: template.id,
-    });
-    if (result.ok) {
-      return {
-        success: true,
-        data: {
-          waMessageId: result.data.wa_message_id,
-          sentAt: new Date().toISOString(),
-        },
-      };
-    }
-    lastError = result.error;
+  const phone = resolveSendPhone(access.data);
+  if (!phone) {
+    return { success: false, error: "Lead has no phone number to send WhatsApp template" };
   }
 
-  return { success: false, error: lastError };
+  const result = await sendTemplateMessage({
+    phoneNumber: phone,
+    templateName: name,
+    templateId: template.id,
+  });
+  if (!result.ok) {
+    return { success: false, error: publicBotbizError(result.error) };
+  }
+
+  return {
+    success: true,
+    data: {
+      waMessageId: result.data.wa_message_id,
+      sentAt: new Date().toISOString(),
+    },
+  };
 }

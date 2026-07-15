@@ -11,6 +11,7 @@ import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { listAdvocateEmployees } from "@/lib/actions/advocates";
+import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 import { BRAND_SHORT } from "@/lib/brand";
 
 export default async function NewOnboardingPage({
@@ -30,7 +31,13 @@ export default async function NewOnboardingPage({
     const { data } = await supabase.from("leads").select("*").eq("id", leadId).single();
     lead = data as Lead | null;
 
-    if (!lead || lead.assigned_to !== current.id || lead.status !== "in_progress") {
+    const isPrimary = lead?.assigned_to === current.id;
+    const isAdditional =
+      !!lead &&
+      !isPrimary &&
+      (await listAdditionalAssigneeIds(supabase, lead.id)).includes(current.id);
+
+    if (!lead || (!isPrimary && !isAdditional) || lead.status !== "in_progress") {
       redirect(dashboardPathForRole(current.role));
     }
   } else if (current.role === "employee") {

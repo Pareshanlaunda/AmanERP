@@ -14,12 +14,16 @@ export function RealtimeEmployeesOverview({ initialEmployees }: RealtimeEmployee
   const [employees, setEmployees] = useState(initialEmployees);
 
   const refresh = useCallback(() => {
-    void getEmployeesOverview().then(setEmployees);
+    void getEmployeesOverview()
+      .then(setEmployees)
+      .catch((err) => {
+        console.error("[employee-overview] refresh failed", err);
+      });
   }, []);
 
   useRealtimeInvalidation(
     "admin:employee-stats",
-    ["leads", "client_onboardings", "profiles"],
+    ["leads", "client_onboardings", "profiles", "lead_additional_assignees"],
     refresh
   );
 

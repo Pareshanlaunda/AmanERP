@@ -14,8 +14,14 @@ export function LoginForm() {
 
   function handleSubmit(formData: FormData) {
     setError(null);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
+    const emailRaw = formData.get("email");
+    const passwordRaw = formData.get("password");
+    if (typeof emailRaw !== "string" || typeof passwordRaw !== "string") {
+      setError("Invalid email or password");
+      return;
+    }
+    const email = emailRaw.trim().slice(0, 254);
+    const password = passwordRaw.slice(0, 128);
 
     startTransition(async () => {
       try {
@@ -28,14 +34,27 @@ export function LoginForm() {
           setError(result.error);
           return;
         }
+        // Only allow same-origin dashboard paths from the server allowlist.
+        const path = result.redirectTo;
+        if (path !== "/admin/dashboard" && path !== "/employee/dashboard") {
+          setError("Sign in failed. Try again.");
+          return;
+        }
         // Full navigation so session cookies from the action are always sent.
-        window.location.assign(result.redirectTo);
+        window.location.assign(path);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Sign in failed";
+        if (/server action|was not found on the server/i.test(message)) {
+          setError(
+            "This page is out of date after a deploy. Hard-refresh (Ctrl+Shift+R) and try again."
+          );
+          return;
+        }
+        // Never surface raw Error.message (can leak stack/env details).
         setError(
           /failed to fetch|networkerror|load failed/i.test(message)
             ? "Cannot reach the server. Check your connection and try again."
-            : message
+            : "Sign in failed. Try again."
         );
       }
     });
@@ -63,6 +82,10 @@ export function LoginForm() {
               placeholder="you@company.com"
               required
               autoComplete="email"
+              maxLength={254}
+              inputMode="email"
+              spellCheck={false}
+              autoCapitalize="none"
             />
           </div>
           <div className="space-y-2">
@@ -72,6 +95,7 @@ export function LoginForm() {
               name="password"
               required
               autoComplete="current-password"
+              maxLength={128}
             />
           </div>
           {error ? (

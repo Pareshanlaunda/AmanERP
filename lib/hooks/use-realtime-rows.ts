@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mergeLeadRealtimeRow } from "@/lib/leads/assignees";
 
 export type RealtimeTable =
   | "leads"
   | "lead_comments"
   | "lead_updates"
+  | "lead_additional_assignees"
   | "notifications"
   | "client_onboardings"
   | "profiles";
@@ -87,18 +89,28 @@ export function useRealtimeRows<T extends { id: string }>({
           }
 
           const row = payload.new as T;
-          const shouldInclude = includeRowRef.current?.(row, event) ?? true;
-          onRowRef.current?.(row, event);
 
           setRows((prev) => {
-            if (!shouldInclude) {
-              return prev.filter((item) => item.id !== row.id);
+            const previous = prev.find((item) => item.id === row.id);
+            const merged =
+              table === "leads"
+                ? mergeLeadRealtimeRow(
+                    previous as T & { additional_assignee_ids?: string[] | null },
+                    row as T & { additional_assignee_ids?: string[] | null }
+                  )
+                : row;
+
+            const include = includeRowRef.current?.(merged, event) ?? true;
+            onRowRef.current?.(merged, event);
+
+            if (!include) {
+              return prev.filter((item) => item.id !== merged.id);
             }
 
-            const exists = prev.some((item) => item.id === row.id);
+            const exists = Boolean(previous);
             const next = exists
-              ? prev.map((item) => (item.id === row.id ? row : item))
-              : [row, ...prev];
+              ? prev.map((item) => (item.id === merged.id ? merged : item))
+              : [merged, ...prev];
 
             return sortRows(next, sortBy, sortDescending);
           });

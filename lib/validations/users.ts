@@ -11,7 +11,13 @@ const passwordSchema = z
 
 export const createUserSchema = z
   .object({
-    email: z.string().email("Valid email is required"),
+    // Unique identity is email (Auth). Same full_name / role allowed for different emails.
+    email: z
+      .string()
+      .trim()
+      .email("Valid email is required")
+      .max(254)
+      .transform((value) => value.toLowerCase()),
     password: passwordSchema,
     full_name: z.string().min(1, "Name is required"),
     role: z.enum(["admin", "employee"]),

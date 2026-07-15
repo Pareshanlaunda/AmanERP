@@ -14,8 +14,12 @@ export const saveClientNoticeSchema = z
       ACTIVE_NOTICE_TEMPLATE_TYPES as unknown as [string, ...string[]]
     ),
     notice_no: z.string().min(1, "Notice No is required"),
-    notice_date: z.string().min(1, "Notice Date is required"),
-    expiry_date: z.string().min(1, "Expiry Date is required"),
+    notice_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Notice Date must be YYYY-MM-DD"),
+    expiry_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expiry Date must be YYYY-MM-DD"),
     loan_id_bearing_no: z.string().min(1, "Loan ID Bearing No is required"),
     ref_number: z.string().min(1, "Ref Number is required"),
     reply_to_name: z.string().min(1, "Reply To Name is required"),
@@ -43,6 +47,14 @@ export const saveClientNoticeSchema = z
   })
   .superRefine((data, ctx) => {
     const cfg = getTemplateFieldConfig(data.template_type);
+
+    if (data.notice_date && data.expiry_date && data.expiry_date < data.notice_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Expiry Date must be on or after Notice Date",
+        path: ["expiry_date"],
+      });
+    }
 
     for (const key of data.reason_keys) {
       if (!reasonKeySet.has(key)) {

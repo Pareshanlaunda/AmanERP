@@ -66,7 +66,11 @@ export function LeadCommentsPanel({
     if (hasUnread) {
       setHasUnread(false);
       startTransition(async () => {
-        await markCommentsRead(leadId);
+        const result = await markCommentsRead(leadId);
+        if (!result.success) {
+          setHasUnread(true);
+          toast.error(result.error);
+        }
       });
     }
   }

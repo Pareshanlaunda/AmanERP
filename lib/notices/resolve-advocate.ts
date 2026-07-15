@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ResolvedAdvocate = {
   profileId: string | null;
@@ -12,11 +13,10 @@ export type ResolvedAdvocate = {
 /**
  * Prefer first additional assignee with employee_type = advocate on the client's lead.
  * Fall back to onboarding advocate_name / advocate_email.
- * Profile address/mobile feed the letterhead (our advocate).
- * Reply Notice "Copy To Advocate" is the lender's advocate — form-only, separate.
+ * Uses admin client for profile read (employees cannot SELECT other profiles under RLS).
  */
 export async function resolveSigningAdvocate(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   opts: {
     leadId: string | null;
     fallbackName: string;
@@ -24,24 +24,39 @@ export async function resolveSigningAdvocate(
   }
 ): Promise<ResolvedAdvocate> {
   if (opts.leadId) {
-    const { data: rows } = await supabase
+    const admin = createAdminClient();
+    const { data: rows, error: rowsError } = await admin
       .from("lead_additional_assignees")
-      .select("employee_id")
-      .eq("lead_id", opts.leadId);
+      .select("employee_id, assigned_at")
+      .eq("lead_id", opts.leadId)
+      .order("assigned_at", { ascending: true });
+
+    if (rowsError) {
+      console.error("[resolve-advocate] assignees failed", rowsError.message);
+      throw new Error("Unable to resolve signing advocate");
+    }
 
     const employeeIds = (rows ?? []).map((r) => r.employee_id as string);
     if (employeeIds.length > 0) {
-      const { data: profiles } = await supabase
+      const { data: profiles, error: profileError } = await admin
         .from("profiles")
         .select("id, full_name, employee_type, address, mobile")
         .in("id", employeeIds)
         .eq("employee_type", "advocate");
 
-      const advocate = profiles?.[0];
-      if (advocate?.full_name) {
+      if (profileError) {
+        console.error("[resolve-advocate] profiles failed", profileError.message);
+        throw new Error("Unable to resolve signing advocate");
+      }
+
+      const byId = new Map((profiles ?? []).map((p) => [p.id as string, p]));
+      // First co-assignee by assigned_at who is an advocate (stable, not unsorted profiles[0]).
+      for (const id of employeeIds) {
+        const advocate = byId.get(id);
+        if (!advocate?.full_name) continue;
         return {
-          profileId: advocate.id,
-          fullName: advocate.full_name,
+          profileId: advocate.id as string,
+          fullName: advocate.full_name as string,
           email: opts.fallbackEmail,
           address: (advocate.address as string | null) ?? null,
           mobile: (advocate.mobile as string | null) ?? null,

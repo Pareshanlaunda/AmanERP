@@ -3,8 +3,8 @@ import { z } from "zod";
 import { assertClientAccess } from "@/lib/auth/client-access";
 import { getUserWithRole } from "@/lib/auth/get-user";
 import {
-  isNoticeDownloadRateLimited,
-  recordNoticeDownloadAttempt,
+  isNoticeDownloadRateLimitedAsync,
+  recordNoticeDownloadAttemptAsync,
 } from "@/lib/auth/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -85,7 +85,7 @@ export async function GET(
     }
 
     const downloadKey = `notice-dl:${user.id}`;
-    if (isNoticeDownloadRateLimited(downloadKey)) {
+    if (await isNoticeDownloadRateLimitedAsync(downloadKey)) {
       return NextResponse.json({ error: "Too many downloads. Try again shortly." }, { status: 429 });
     }
 
@@ -110,10 +110,8 @@ export async function GET(
       .maybeSingle();
 
     if (error || !notice) {
-      return NextResponse.json(
-        { error: error?.message ?? "Notice not found" },
-        { status: 404 }
-      );
+      if (error) console.error("[notice download] lookup failed", error.message);
+      return NextResponse.json({ error: "Notice not found" }, { status: 404 });
     }
 
     const access = await assertClientAccess(
@@ -126,7 +124,7 @@ export async function GET(
       return NextResponse.json({ error: access.error }, { status: 403 });
     }
 
-    recordNoticeDownloadAttempt(downloadKey);
+    await recordNoticeDownloadAttemptAsync(downloadKey);
 
     const merge = toMergeInput(
       notice as Record<string, unknown>,
@@ -156,7 +154,6 @@ export async function GET(
     );
   } catch (e) {
     console.error("[notice download]", e);
-    const message = e instanceof Error ? e.message : "Generation failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Generation failed" }, { status: 500 });
   }
 }

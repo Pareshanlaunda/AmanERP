@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { assertClientAccess } from "@/lib/auth/client-access";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getNotifications } from "@/lib/actions/notifications";
+import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
@@ -52,8 +53,14 @@ export default async function EmployeeClientDetailPage({
       > | null) ?? null;
   }
 
-  const canChat =
-    linkedLead?.source === "whatsapp" && linkedLead.assigned_to === current.id;
+  let canChat = false;
+  if (linkedLead?.source === "whatsapp") {
+    const isPrimary = linkedLead.assigned_to === current.id;
+    const isAdditional =
+      !isPrimary &&
+      (await listAdditionalAssigneeIds(supabase, linkedLead.id)).includes(current.id);
+    canChat = isPrimary || isAdditional;
+  }
 
   return (
     <div className="min-h-screen bg-background">

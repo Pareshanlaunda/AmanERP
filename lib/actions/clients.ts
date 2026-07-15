@@ -1,7 +1,9 @@
 "use server";
 
 import { requireUserWithRole } from "@/lib/auth/get-user";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { publicActionError } from "@/lib/errors/public-error";
 import { revalidateClientMutation, revalidateLeadMutation } from "@/lib/revalidate";
 import {
   listAdditionalAssigneeIds,
@@ -61,13 +63,18 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
     return { success: true };
   }
 
-  const { data: profile } = await supabase
+  const employeeIds = [...new Set([newOwner, ...additionalIds])];
+  const { data: profiles, error: profileError } = await createAdminClient()
     .from("profiles")
     .select("id, role")
-    .eq("id", newOwner)
-    .single();
+    .in("id", employeeIds);
 
-  if (!profile || profile.role !== "employee") {
+  if (
+    profileError ||
+    !profiles ||
+    profiles.length !== employeeIds.length ||
+    profiles.some((p) => p.role !== "employee")
+  ) {
     return { success: false, error: "Selected user is not an employee" };
   }
 
@@ -80,7 +87,9 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
       })
       .eq("id", parsed.data.client_id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      return { success: false, error: publicActionError("Unable to reassign client", error) };
+    }
   }
 
   if (parsed.data.sync_lead !== false && leadId) {
@@ -92,6 +101,7 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
 
     if (linkedLead) {
       const currentStatus = linkedLead.status as string;
+      const previousLeadOwner = linkedLead.assigned_to as string | null;
       const nextStatus =
         currentStatus === "converted" || currentStatus === "lost"
           ? currentStatus
@@ -110,9 +120,18 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
         .eq("id", leadId);
 
       if (leadError) {
+        if (primaryChanged) {
+          await supabase
+            .from("client_onboardings")
+            .update({
+              submitted_by: previousOwner,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", parsed.data.client_id);
+        }
         return {
           success: false,
-          error: `Client updated, but lead update failed: ${leadError.message}`,
+          error: publicActionError("Unable to sync linked lead", leadError),
         };
       }
 
@@ -122,18 +141,46 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
         assignedBy: user.id,
       });
       if (additionalError) {
+        await replaceAdditionalAssignees(supabase, {
+          leadId,
+          employeeIds: previousAdditional,
+          assignedBy: user.id,
+        });
+        await supabase
+          .from("leads")
+          .update({
+            assigned_to: previousLeadOwner,
+            status: currentStatus,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", leadId);
+        if (primaryChanged) {
+          await supabase
+            .from("client_onboardings")
+            .update({
+              submitted_by: previousOwner,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", parsed.data.client_id);
+        }
         return {
           success: false,
-          error: `Client updated, but additional assignees failed: ${additionalError}`,
+          error: publicActionError("Unable to update additional assignees", additionalError),
         };
       }
+
+      await supabase
+        .from("leads")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", leadId);
 
       revalidateLeadMutation(leadId);
     }
   }
 
+  const admin = createAdminClient();
   if (primaryChanged) {
-    await supabase.from("notifications").insert({
+    await admin.from("notifications").insert({
       user_id: newOwner,
       type: "lead_assigned",
       title: "Client assigned to you",
@@ -144,7 +191,7 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
 
   const newlyAdded = additionalIds.filter((id) => !previousAdditional.includes(id));
   if (newlyAdded.length > 0) {
-    await supabase.from("notifications").insert(
+    await admin.from("notifications").insert(
       newlyAdded.map((user_id) => ({
         user_id,
         type: "lead_assigned" as const,

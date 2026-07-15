@@ -100,13 +100,33 @@ async function findExistingLead(
   const supabase = createAdminClient();
   const phone = resolveContactPhone(fields);
 
+  // Prefer indexed lookups before broad scan.
+  if (fields.botbiz_subscriber_id) {
+    const { data: bySub, error: subError } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("source", "whatsapp")
+      .eq("botbiz_subscriber_id", fields.botbiz_subscriber_id)
+      .maybeSingle();
+    if (subError) {
+      console.error("[botbiz] findExistingLead subscriber lookup failed", subError.message);
+      throw new Error("Unable to match WhatsApp lead");
+    }
+    if (bySub) return bySub as Lead;
+  }
+
   // Broad fetch: small team ERP; phone formats vary so we match in app.
-  const { data: candidates } = await supabase
+  const { data: candidates, error: listError } = await supabase
     .from("leads")
     .select("*")
     .eq("source", "whatsapp")
     .order("created_at", { ascending: false })
     .limit(500);
+
+  if (listError) {
+    console.error("[botbiz] findExistingLead scan failed", listError.message);
+    throw new Error("Unable to match WhatsApp lead");
+  }
 
   const rows = (candidates ?? []) as Lead[];
   if (!rows.length) return null;
@@ -151,23 +171,46 @@ export async function reprocessWhatsAppLeadFromMetadata(
     .single();
 
   if (error || !lead?.whatsapp_metadata) {
-    return { success: false, error: error?.message ?? "Lead has no whatsapp_metadata to reprocess." };
+    if (error) console.error("[botbiz] reprocess lookup failed", error.message);
+    return { success: false, error: "Unable to reprocess WhatsApp lead" };
   }
 
   return createWhatsAppLeadFromPayload(lead.whatsapp_metadata);
 }
 
+function isSubscriberSyncPayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  return (payload as { postback_id?: unknown }).postback_id === "botbiz_subscriber_sync";
+}
+
 export async function createWhatsAppLeadFromPayload(
   payload: unknown
 ): Promise<CreateWhatsAppLeadResult> {
-  const fields = extractBotbizLeadFields(payload);
-  if (!fields) {
+  const extracted = extractBotbizLeadFields(payload);
+  if (!extracted) {
     return {
       success: false,
       error:
         "Missing phone/subscriber (and no client name). Enable POSTBACK + SUBSCRIBER ID / PHONE in Botbiz webhook.",
     };
   }
+
+  // Admin-dashboard Botbiz pull must never overwrite form metadata / slot answers.
+  // Subscriber directory often has a display name → extract treats it as "complete" form.
+  const subscriberSync = isSubscriberSyncPayload(payload);
+  const fields = subscriberSync
+    ? {
+        ...extracted,
+        is_early_contact: true,
+        whatsapp_slot_answers: [] as typeof extracted.whatsapp_slot_answers,
+        loan_type: null,
+        personal_loan_amount_range: null,
+        credit_card_amount_range: null,
+        harassment_faced: null,
+        notes:
+          "Early WhatsApp contact — Client_Details not completed yet. Employee can follow up in chat.",
+      }
+    : extracted;
 
   const contactPhone = resolveContactPhone(fields);
   const idempotencyKey = createHash("sha256")
@@ -188,7 +231,13 @@ export async function createWhatsAppLeadFromPayload(
   }
 
   const createdBy = await getWhatsAppSystemUserId();
-  const existing = await findExistingLead(fields);
+  let existing: Lead | null;
+  try {
+    existing = await findExistingLead(fields);
+  } catch (err) {
+    console.error("[botbiz] findExistingLead failed", err);
+    return { success: false, error: "Unable to match WhatsApp lead" };
+  }
 
   // Repeat early pings (POSTBACK / sync) on a lead that already has form data — touch only
   const existingLooksComplete =
@@ -204,23 +253,35 @@ export async function createWhatsAppLeadFromPayload(
       webhook_idempotency_key: idempotencyKey,
       updated_at: new Date().toISOString(),
     };
+    // Never clobber a form-entered phone on early pings / language taps.
     if (contactPhone && !existing.client_phone) {
-      lightPatch.client_phone = contactPhone;
-    } else if (contactPhone) {
       lightPatch.client_phone = contactPhone;
     }
     if (fields.botbiz_subscriber_id && !existing.botbiz_subscriber_id) {
       lightPatch.botbiz_subscriber_id = fields.botbiz_subscriber_id;
     }
-    if (fields.preferred_language) {
+    // Sync directory pull must not stomp language; webhook early pings may set it.
+    if (!subscriberSync && fields.preferred_language) {
       lightPatch.preferred_language = fields.preferred_language;
     }
-    // Keep richer name / form fields when early ping repeats
-    if (!existingLooksComplete && fields.client_name && !/^WhatsApp\s/i.test(fields.client_name)) {
+    // Keep richer name / form fields when early ping repeats (never from subscriber sync)
+    if (
+      !subscriberSync &&
+      !existingLooksComplete &&
+      fields.client_name &&
+      !/^WhatsApp\s/i.test(fields.client_name)
+    ) {
       lightPatch.client_name = fields.client_name;
     }
 
-    await supabase.from("leads").update(lightPatch).eq("id", existing.id);
+    const { error: lightError } = await supabase
+      .from("leads")
+      .update(lightPatch)
+      .eq("id", existing.id);
+    if (lightError) {
+      console.error("[botbiz] early-contact update failed", lightError.message);
+      return { success: false, error: "Unable to save lead" };
+    }
     // No admin spam on every message / language tap
     return { success: true, lead_id: existing.id, created: false, updated: false };
   }
@@ -246,8 +307,12 @@ export async function createWhatsAppLeadFromPayload(
       ? resolveWhatsAppLeadNotes(fields.notes, existing?.notes)
       : resolveWhatsAppLeadNotes(fields.notes, null),
     botbiz_subscriber_id: fields.botbiz_subscriber_id ?? existing?.botbiz_subscriber_id ?? null,
-    preferred_language: fields.preferred_language,
-    whatsapp_metadata: payload as Record<string, unknown>,
+    preferred_language: subscriberSync
+      ? (existing?.preferred_language ?? fields.preferred_language)
+      : fields.preferred_language,
+    whatsapp_metadata: subscriberSync
+      ? (existing?.whatsapp_metadata ?? (payload as Record<string, unknown>))
+      : (payload as Record<string, unknown>),
     whatsapp_slot_answers: fields.is_early_contact
       ? existing?.whatsapp_slot_answers ?? fields.whatsapp_slot_answers
       : fields.whatsapp_slot_answers,
@@ -264,7 +329,10 @@ export async function createWhatsAppLeadFromPayload(
       .select("id, client_name")
       .single();
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error("[botbiz] update lead failed", error.message);
+      return { success: false, error: "Unable to save lead" };
+    }
 
     // Notify only when form details arrive (upgrade), not every message
     if (!fields.is_early_contact) {
@@ -284,26 +352,38 @@ export async function createWhatsAppLeadFromPayload(
     .single();
 
   if (error) {
-    if (error.code === "23505" && error.message.includes("webhook_idempotency_key")) {
-      const { data: existingByKey } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("webhook_idempotency_key", idempotencyKey)
-        .maybeSingle();
-      if (existingByKey) {
-        return { success: true, lead_id: existingByKey.id, created: false, updated: false };
+    if (error.code === "23505") {
+      // Idempotency key, unique phone, or unique subscriber — coalesce onto existing row.
+      if (error.message.includes("webhook_idempotency_key")) {
+        const { data: existingByKey } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("webhook_idempotency_key", idempotencyKey)
+          .maybeSingle();
+        if (existingByKey) {
+          return { success: true, lead_id: existingByKey.id, created: false, updated: false };
+        }
+      }
+      let raced: Lead | null = null;
+      try {
+        raced = await findExistingLead(fields);
+      } catch (err) {
+        console.error("[botbiz] race coalesce failed", err);
+        return { success: false, error: "Unable to save lead" };
+      }
+      if (raced) {
+        if (subscriberSync) {
+          return { success: true, lead_id: raced.id, created: false, updated: false };
+        }
+        await supabase
+          .from("leads")
+          .update({ ...leadPatch, updated_at: new Date().toISOString() })
+          .eq("id", raced.id);
+        return { success: true, lead_id: raced.id, created: false, updated: true };
       }
     }
-    // Race: another request inserted same phone — re-find and update
-    const raced = await findExistingLead(fields);
-    if (raced) {
-      await supabase
-        .from("leads")
-        .update({ ...leadPatch, updated_at: new Date().toISOString() })
-        .eq("id", raced.id);
-      return { success: true, lead_id: raced.id, created: false, updated: true };
-    }
-    return { success: false, error: error.message };
+    console.error("[botbiz] insert lead failed", error.message);
+    return { success: false, error: "Unable to save lead" };
   }
 
   await notifyAdmins(data, { isUpdate: false, isEarlyContact: fields.is_early_contact });
