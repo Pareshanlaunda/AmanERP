@@ -13,7 +13,14 @@ const connectSrc = [
 ].join(" ");
 
 const nextConfig: NextConfig = {
-  // Ensure notice Word templates + signature asset are available to the download API
+  // Node-only notice tooling — native require (Next docs: serverExternalPackages).
+  // XLSX is write-only via pizzip (no exceljs/unzipper). Do not pull AWS for notices.
+  serverExternalPackages: [
+    "docxtemplater",
+    "docxtemplater-image-module-free",
+    "pizzip",
+  ],
+  // Only app assets need explicit tracing; packages above are traced with the route.
   outputFileTracingIncludes: {
     "/api/notices/[id]/download": [
       "./templates/notices/**/*",

@@ -18,6 +18,34 @@ export const runtime = "nodejs";
 
 type Format = "docx" | "pdf" | "xlsx";
 
+/** Columns needed to generate a notice — no SELECT *. */
+const NOTICE_DOWNLOAD_SELECT =
+  "id, client_onboarding_id, template_type, notice_no, notice_date, expiry_date, loan_id_bearing_no, ref_number, reply_to_name, reply_to_address, reason_keys, additional_reason, copy_to_advocate, copy_to_advocate_name, copy_to_advocate_address, reference_number_on_notice, signature_mode, enable_dates, signing_advocate_name, signing_advocate_email, payload";
+
+type NoticeDownloadRow = {
+  id: string;
+  client_onboarding_id: string;
+  template_type: string;
+  notice_no: string;
+  notice_date: string;
+  expiry_date: string;
+  loan_id_bearing_no: string;
+  ref_number: string;
+  reply_to_name: string;
+  reply_to_address: string;
+  reason_keys: string[] | null;
+  additional_reason: string | null;
+  copy_to_advocate: boolean;
+  copy_to_advocate_name: string | null;
+  copy_to_advocate_address: string | null;
+  reference_number_on_notice: string | null;
+  signature_mode: string | null;
+  enable_dates: boolean | null;
+  signing_advocate_name: string | null;
+  signing_advocate_email: string | null;
+  payload: Record<string, unknown> | null;
+};
+
 function toMergeInput(row: Record<string, unknown>, clientName: string): NoticeMergeInput {
   const noticeDate = String(row.notice_date ?? "").slice(0, 10);
   const expiryDate = String(row.expiry_date ?? "").slice(0, 10);
@@ -60,9 +88,9 @@ function toMergeInput(row: Record<string, unknown>, clientName: string): NoticeM
 }
 
 function fileResponse(buf: Buffer, contentType: string, filename: string, inline: boolean) {
-  const disposition = inline
-    ? `inline; filename="${filename}"`
-    : `attachment; filename="${filename}"`;
+  // ASCII fallback + RFC 5987 — no raw user text in headers.
+  const asciiName = filename.replace(/[^\w.-]+/g, "_") || "notice";
+  const disposition = `${inline ? "inline" : "attachment"}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(asciiName)}`;
   return new NextResponse(new Uint8Array(buf), {
     status: 200,
     headers: {
@@ -70,6 +98,7 @@ function fileResponse(buf: Buffer, contentType: string, filename: string, inline
       "Content-Disposition": disposition,
       "Content-Length": String(buf.length),
       "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
@@ -103,20 +132,22 @@ export async function GET(
     }
 
     const supabase = await createClient();
-    const { data: notice, error } = await supabase
+    const { data, error } = await supabase
       .from("client_notices")
-      .select("*")
+      .select(NOTICE_DOWNLOAD_SELECT)
       .eq("id", idParsed.data)
       .maybeSingle();
 
-    if (error || !notice) {
+    if (error || !data) {
       if (error) console.error("[notice download] lookup failed", error.message);
       return NextResponse.json({ error: "Notice not found" }, { status: 404 });
     }
 
+    const notice = data as NoticeDownloadRow;
+
     const access = await assertClientAccess(
       supabase,
-      notice.client_onboarding_id as string,
+      notice.client_onboarding_id,
       user.id,
       user.role
     );
@@ -126,10 +157,7 @@ export async function GET(
 
     await recordNoticeDownloadAttemptAsync(downloadKey);
 
-    const merge = toMergeInput(
-      notice as Record<string, unknown>,
-      access.client.client_name
-    );
+    const merge = toMergeInput(notice, access.client.client_name);
     const safeName = String(notice.notice_no).replace(/[^\w.-]+/g, "_") || "notice";
 
     if (format === "docx") {
