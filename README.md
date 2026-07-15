@@ -120,6 +120,13 @@ npm run create-admin         # First admin (prefer /admin/users after that)
 npm run create-employee      # CLI employee create
 ```
 
+## Dependency security (npm)
+
+- Prefer upstream bumps (Next / libraries) over force-fixes. Never use `npm audit fix --force` or `.npmrc audit=false`.
+- `overrides` pin only known-good patches for real CVEs still reachable from our tree (`postcss` via Next; `xmldom` → `@xmldom/xmldom` via `docxtemplater-image-module-free`).
+- Notice **Excel** export is write-only via `pizzip` (`lib/notices/write-simple-xlsx.ts`) — **not** exceljs. Leftover: do not re-add exceljs until exceljs 5+ drops unzipper/fstream, or swap to another write-only lib. Do not invent AWS/S3 deps for Word/Excel notices.
+- Leftover scanner noise from Word image module may remain until that package updates; leave warnings visible.
+
 ## Optional: Vercel staging
 
 Import the GitHub repo on Vercel, set the three Supabase keys, and mirror Auth Site URL / Redirect URLs. Prefer Hostinger for production `ops` traffic.

@@ -4,7 +4,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import ImageModule from "docxtemplater-image-module-free";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import ExcelJS from "exceljs";
+import { writeSimpleXlsx } from "@/lib/notices/write-simple-xlsx";
 import { buildReasonParagraphs } from "@/lib/notices/reason-options";
 import { formatNoticeDate, formatNoticeDateLong, formatClidRef } from "@/lib/notices/format-notice-date";
 import { DEFAMATION_CRIMINAL_CHARGES_RS } from "@/lib/notices/defamation-constants";
@@ -618,10 +618,8 @@ function wrapText(text: string, maxChars: number): string[] {
 }
 
 export async function generateNoticeXlsx(input: NoticeMergeInput & { id?: string }): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet("Notice");
   const data = buildMergeData(input);
-  const rows: [string, string][] = [
+  const rows: string[][] = [
     ["Notice ID", input.id ?? ""],
     ["Template Type", input.template_type],
     ["Notice No", input.notice_no],
@@ -648,13 +646,5 @@ export async function generateNoticeXlsx(input: NoticeMergeInput & { id?: string
     ["Intimation Mail Date", data.intimation_mail_date_long],
     ["Reasons", data.reasons.map((r) => `${r.letter} ${r.text}`).join("\n")],
   ];
-  sheet.columns = [
-    { header: "Field", key: "field", width: 28 },
-    { header: "Value", key: "value", width: 80 },
-  ];
-  for (const [field, value] of rows) {
-    sheet.addRow({ field, value });
-  }
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf);
+  return writeSimpleXlsx("Notice", ["Field", "Value"], rows);
 }
