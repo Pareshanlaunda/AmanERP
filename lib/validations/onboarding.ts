@@ -39,7 +39,13 @@ const optionalIntField = z.union([z.string(), z.number()]).optional();
 
 export const onboardingFormSchema = z.object({
   client_name: z.string().min(1, "Client name is required"),
-  client_email: z.string().optional(),
+  client_email: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v?.trim() || z.string().email().safeParse(v.trim()).success,
+      "Enter a valid email or leave blank"
+    ),
   client_contact_number: z.string().optional(),
   occupation: z
     .enum([

@@ -45,7 +45,8 @@ export function NoticeSelectButton({
       await downloadNoticeFile(noticeId, "docx");
       toast.success("Download started");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Download failed");
+      console.error("[notice download]", e);
+      toast.error("Download failed");
     } finally {
       setDownloading(false);
     }

@@ -32,7 +32,11 @@ export async function getLatestNoticeIdsForClients(
     .in("client_onboarding_id", clientOnboardingIds)
     .order("created_at", { ascending: false });
 
-  if (error || !data) return {};
+  if (error) {
+    console.error("[notices] getLatestNoticeIds failed", error.message);
+    throw new Error("Unable to load notice links");
+  }
+  if (!data) return {};
 
   const map: Record<string, string> = {};
   for (const row of data) {
@@ -236,7 +240,8 @@ export async function saveClientNotice(
     .single();
 
   if (error || !row) {
-    return { success: false, error: error?.message ?? "Failed to save notice" };
+    if (error) console.error("[notices] save failed", error.message);
+    return { success: false, error: "Failed to save notice" };
   }
 
   revalidatePath("/employee/dashboard");

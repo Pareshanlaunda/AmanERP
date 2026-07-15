@@ -3,12 +3,14 @@ import { createWhatsAppLeadFromPayload } from "@/lib/botbiz/create-whatsapp-lead
 import { debugLogBotbizPayload } from "@/lib/botbiz/debug-payload";
 import { extractBotbizLeadFields } from "@/lib/botbiz/extract-lead-fields";
 import { verifyBotbizWebhook } from "@/lib/botbiz/verify-webhook";
-import { isWebhookRateLimited, recordWebhookAttempt } from "@/lib/auth/rate-limit";
+import { clientIpFromHeaders } from "@/lib/auth/client-ip";
+import {
+  isWebhookRateLimitedAsync,
+  recordWebhookAttemptAsync,
+} from "@/lib/auth/rate-limit";
 
 function webhookRateLimitKey(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwarded || request.headers.get("x-real-ip") || "unknown";
-  return `botbiz:${ip}`;
+  return `botbiz:${clientIpFromHeaders(request.headers)}`;
 }
 
 export async function handleBotbizInboundWebhook(
@@ -20,10 +22,10 @@ export async function handleBotbizInboundWebhook(
   }
 
   const rateKey = webhookRateLimitKey(request);
-  if (isWebhookRateLimited(rateKey)) {
+  if (await isWebhookRateLimitedAsync(rateKey)) {
     return NextResponse.json({ success: false, error: "Too many requests" }, { status: 429 });
   }
-  recordWebhookAttempt(rateKey);
+  await recordWebhookAttemptAsync(rateKey);
 
   let payload: unknown;
   try {
@@ -37,7 +39,11 @@ export async function handleBotbizInboundWebhook(
   try {
     const result = await createWhatsAppLeadFromPayload(payload);
     if (!result.success) {
-      return NextResponse.json(result, { status: 422 });
+      console.error("[botbiz webhook] save failed", result.error);
+      return NextResponse.json(
+        { success: false, error: "Unable to save lead" },
+        { status: 422 }
+      );
     }
 
     if (process.env.NODE_ENV === "development") {

@@ -3,6 +3,7 @@
 import { revalidateAfterUserCreated } from "@/lib/revalidate";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { listAllAuthUsers } from "@/lib/queries/auth-users";
 import { createUserSchema, adminResetPasswordSchema, type CreateUserInput, type AdminResetPasswordInput } from "@/lib/validations/users";
 import type { Profile } from "@/lib/types/database";
 
@@ -22,17 +23,24 @@ export async function createUser(data: CreateUserInput): Promise<ActionResult> {
 async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionResult> {
   const admin = createAdminClient();
 
+  const email = data.email.trim().toLowerCase();
+
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email: data.email.trim(),
+    email,
     password: data.password,
     email_confirm: true,
     user_metadata: { full_name: data.full_name.trim() },
   });
 
   if (authError) {
-    return { success: false, error: authError.message };
+    const msg = authError.message.toLowerCase();
+    if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+      return { success: false, error: "Email already registered" };
+    }
+    return { success: false, error: "Unable to create user" };
   }
 
+  // Insert via bound client params — never build SQL with user strings.
   const { error: profileError } = await admin.from("profiles").insert({
     id: authData.user.id,
     full_name: data.full_name.trim(),
@@ -44,7 +52,7 @@ async function createUserWithAdminClient(data: CreateUserInput): Promise<ActionR
 
   if (profileError) {
     await admin.auth.admin.deleteUser(authData.user.id);
-    return { success: false, error: profileError.message };
+    return { success: false, error: "Unable to create user profile" };
   }
 
   revalidateAfterUserCreated();
@@ -55,17 +63,19 @@ export async function listUsers(): Promise<(Profile & { email?: string })[]> {
   await requireUserWithRole(["admin"]);
 
   const admin = createAdminClient();
-  const { data: profiles, error } = await admin
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const [{ data: profiles, error }, authUsers] = await Promise.all([
+    admin.from("profiles").select("*").order("created_at", { ascending: false }),
+    listAllAuthUsers(),
+  ]);
 
-  if (error || !profiles) return [];
+  if (error) {
+    console.error("[users] listUsers failed", error.message);
+    throw new Error("Unable to load users");
+  }
+  if (!profiles) throw new Error("Unable to load users");
 
-  const { data: authUsers } = await admin.auth.admin.listUsers();
-  const emailMap = new Map(
-    (authUsers?.users ?? []).map((u) => [u.id, u.email ?? ""])
-  );
+  // Duplicate identity = same email only. Same full_name/role is allowed.
+  const emailMap = new Map(authUsers.map((u) => [u.id, u.email ?? ""]));
 
   return profiles.map((p) => ({
     ...(p as Profile),
@@ -76,7 +86,11 @@ export async function listUsers(): Promise<(Profile & { email?: string })[]> {
 export async function getUserRoleCounts() {
   await requireUserWithRole(["admin"]);
   const admin = createAdminClient();
-  const { data } = await admin.from("profiles").select("role");
+  const { data, error } = await admin.from("profiles").select("role");
+  if (error) {
+    console.error("[users] getUserRoleCounts failed", error.message);
+    throw new Error("Unable to load user counts");
+  }
   const rows = data ?? [];
   return {
     admin: rows.filter((r) => r.role === "admin").length,
@@ -103,10 +117,7 @@ export async function adminResetUserPassword(
     .eq("id", parsed.data.user_id)
     .maybeSingle();
 
-  if (profileError) {
-    return { success: false, error: profileError.message };
-  }
-  if (!profile) {
+  if (profileError || !profile) {
     return { success: false, error: "User not found" };
   }
 
@@ -115,7 +126,7 @@ export async function adminResetUserPassword(
   });
 
   if (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: "Unable to reset password" };
   }
 
   return { success: true };

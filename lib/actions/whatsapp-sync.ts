@@ -2,6 +2,7 @@
 
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { syncRecentWhatsAppLeadsFromBotbiz } from "@/lib/botbiz/sync-subscribers";
+import { publicBotbizError } from "@/lib/errors/public-error";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -18,7 +19,12 @@ export async function syncWhatsAppLeadsAction(): Promise<{
 
   const result = await syncRecentWhatsAppLeadsFromBotbiz({ limit: 40 });
   if (!result.ok) {
-    return { success: false, created: 0, updated: 0, error: result.error };
+    return {
+      success: false,
+      created: 0,
+      updated: 0,
+      error: publicBotbizError(result.error),
+    };
   }
 
   if (result.created > 0 || result.updated > 0) {

@@ -5,9 +5,11 @@ export function revalidateLeadPages(leadId: string) {
   revalidatePath(`/employee/leads/${leadId}`);
 }
 
-/** Realtime covers dashboard UI — only revalidate lead detail pages. */
+/** Lead detail + admin/employee dashboards (employee overview counts). */
 export function revalidateLeadMutation(leadId: string) {
   revalidateLeadPages(leadId);
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/employee/dashboard");
 }
 
 /** User/admin list pages still need SSR refresh after structural changes. */

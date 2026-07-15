@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { after } from "next/server";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getEmployeesOverview } from "@/lib/actions/employees";
 import { getNotifications } from "@/lib/actions/notifications";
@@ -14,12 +15,15 @@ export default async function AdminDashboardPage() {
   const current = await requireUserWithRole(["admin"]);
   const supabase = await createClient();
 
-  // Pull recent Botbiz contacts → leads (inbound first msg OR we messaged first).
-  // Soft-fail: dashboard still loads if Botbiz API is down / unconfigured.
-  const { syncRecentWhatsAppLeadsFromBotbiz } = await import(
-    "@/lib/botbiz/sync-subscribers"
-  );
-  await syncRecentWhatsAppLeadsFromBotbiz({ limit: 40 }).catch(() => null);
+  // Do not block first paint / post-login navigate on Hostinger.
+  // Botbiz pull of ~40 subscribers can take many seconds; run after response.
+  after(() => {
+    void import("@/lib/botbiz/sync-subscribers").then(({ syncRecentWhatsAppLeadsFromBotbiz }) =>
+      syncRecentWhatsAppLeadsFromBotbiz({ limit: 40 }).catch((err) => {
+        console.error("[admin-dashboard] background Botbiz sync failed", err);
+      })
+    );
+  });
 
   const [notifications, employeeStats, leadsResult] = await Promise.all([
     getNotifications(),
@@ -33,6 +37,10 @@ export default async function AdminDashboardPage() {
       .limit(50),
   ]);
 
+  if (leadsResult.error) {
+    console.error("[admin-dashboard] recent leads failed", leadsResult.error.message);
+    throw new Error("Unable to load recent leads");
+  }
   const rawLeads = (leadsResult.data ?? []) as Lead[];
   const assigneeMap = await listAdditionalAssigneeIdsForLeads(
     supabase,

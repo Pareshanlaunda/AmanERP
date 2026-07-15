@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUserWithRole } from "@/lib/auth/get-user";
@@ -8,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadUpdate } from "@/lib/types/database";
 import { AppHeader } from "@/components/shared/app-header";
 import { EmployeeLeadDetailLive } from "@/components/employee/employee-lead-detail-live";
+import { SuccessToast } from "@/components/dashboard/success-toast";
 import { Button } from "@/components/ui/button";
 import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
 import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
@@ -50,8 +52,17 @@ export default async function EmployeeLeadDetailPage({
             .select("client_id")
             .eq("id", typedLead.onboarding_record_id)
             .single()
-        : Promise.resolve({ data: null }),
+        : Promise.resolve({ data: null, error: null }),
     ]);
+
+  if (updatesResult.error) {
+    console.error("[employee-lead] updates failed", updatesResult.error.message);
+    throw new Error("Unable to load lead timeline");
+  }
+  if (onboardingResult.error) {
+    console.error("[employee-lead] onboarding failed", onboardingResult.error.message);
+    throw new Error("Unable to load onboarding link");
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,6 +74,9 @@ export default async function EmployeeLeadDetailPage({
         leadLinkPrefix="/employee/leads"
       />
       <main className="page-container-narrow space-y-6">
+        <Suspense fallback={null}>
+          <SuccessToast />
+        </Suspense>
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/employee/dashboard">
             <ArrowLeft className="h-4 w-4" />

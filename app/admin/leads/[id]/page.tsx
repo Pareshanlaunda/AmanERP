@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireUserWithRole } from "@/lib/auth/get-user";
@@ -10,6 +11,7 @@ import type { Lead, LeadUpdate } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
 import { AdminLeadDetailLive } from "@/components/admin/admin-lead-detail-live";
+import { SuccessToast } from "@/components/dashboard/success-toast";
 import { Button } from "@/components/ui/button";
 import { getAuthorNamesFromComments } from "@/lib/queries/profiles";
 import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
@@ -21,11 +23,16 @@ async function getLeadOnboarding(
   const onboardingId = lead.onboarding_record_id ?? lead.converted_onboarding_id;
   if (!onboardingId) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("client_onboardings")
     .select("*")
     .eq("id", onboardingId)
     .single();
+
+  if (error) {
+    console.error("[admin-lead] onboarding failed", error.message);
+    throw new Error("Unable to load onboarding");
+  }
 
   return (data as ClientOnboarding) ?? null;
 }
@@ -45,7 +52,7 @@ export default async function AdminLeadDetailPage({
   const typedLead = lead as Lead;
   typedLead.additional_assignee_ids = await listAdditionalAssigneeIds(supabase, id);
 
-  const [{ data: updates }, employees, notifications, comments, unread, authorNames, onboarding] =
+  const [updatesResult, employees, notifications, comments, unread, authorNames, onboarding] =
     await Promise.all([
       supabase
         .from("lead_updates")
@@ -60,6 +67,11 @@ export default async function AdminLeadDetailPage({
       getLeadOnboarding(supabase, typedLead),
     ]);
 
+  if (updatesResult.error) {
+    console.error("[admin-lead] updates failed", updatesResult.error.message);
+    throw new Error("Unable to load lead timeline");
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
@@ -70,6 +82,9 @@ export default async function AdminLeadDetailPage({
         leadLinkPrefix="/admin/leads"
       />
       <main className="page-container-narrow space-y-6">
+        <Suspense fallback={null}>
+          <SuccessToast />
+        </Suspense>
         <Button variant="ghost" size="sm" asChild className="-ml-2">
           <Link href="/admin/dashboard">
             <ArrowLeft className="h-4 w-4" />
@@ -85,7 +100,7 @@ export default async function AdminLeadDetailPage({
           hasUnread={unread}
           authorNames={authorNames}
           onboarding={onboarding}
-          updates={(updates ?? []) as LeadUpdate[]}
+          updates={(updatesResult.data ?? []) as LeadUpdate[]}
         />
       </main>
     </div>

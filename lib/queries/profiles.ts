@@ -9,7 +9,15 @@ export async function getAuthorNamesForIds(
 
   // Admin client: employees can only SELECT own profile under RLS; comments need coworker names.
   const admin = createAdminClient();
-  const { data } = await admin.from("profiles").select("id, full_name").in("id", uniqueIds);
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", uniqueIds);
+
+  if (error) {
+    console.error("[profiles] getAuthorNamesForIds failed", error.message);
+    throw new Error("Unable to load author names");
+  }
 
   return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name ?? "User"]));
 }
@@ -19,10 +27,15 @@ export async function getAuthorNamesFromComments(
   supabase?: Awaited<ReturnType<typeof createClient>>
 ): Promise<Record<string, string>> {
   const client = supabase ?? (await createClient());
-  const { data: comments } = await client
+  const { data: comments, error } = await client
     .from("lead_comments")
     .select("author_id")
     .eq("lead_id", leadId);
+
+  if (error) {
+    console.error("[profiles] getAuthorNamesFromComments failed", error.message);
+    throw new Error("Unable to load author names");
+  }
 
   const authorIds = (comments ?? []).map((c) => c.author_id);
   return getAuthorNamesForIds(authorIds);
@@ -41,11 +54,16 @@ export async function getEmployeeProfilesFromDb(): Promise<
   }[]
 > {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("id, employee_code, full_name, role, employee_type, address, mobile, created_at")
     .eq("role", "employee")
     .order("full_name", { ascending: true });
+
+  if (error) {
+    console.error("[profiles] getEmployeeProfilesFromDb failed", error.message);
+    throw new Error("Unable to load employees");
+  }
 
   return data ?? [];
 }

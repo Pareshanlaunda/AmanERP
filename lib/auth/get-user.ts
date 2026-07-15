@@ -17,24 +17,32 @@ export async function getUserWithRole(): Promise<UserWithRole | null> {
 
   if (!user) return null;
 
+  // Bound .eq — never interpolate email/id into SQL strings.
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select(
+      "id, full_name, role, employee_type, employee_code, address, mobile, created_at"
+    )
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   if (profileError || !profile) return null;
+
+  const role = profile.role as UserRole;
+  if (role !== "admin" && role !== "employee") return null;
 
   return {
     id: user.id,
     email: user.email ?? "",
     profile: profile as Profile,
-    role: profile.role as UserRole,
+    role,
   };
 }
 
 export function dashboardPathForRole(role: UserRole): string {
-  return role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
+  if (role === "admin") return "/admin/dashboard";
+  if (role === "employee") return "/employee/dashboard";
+  return "/";
 }
 
 export async function requireUserWithRole(allowedRoles?: UserRole[]) {

@@ -35,11 +35,6 @@ export function EmployeeDashboardContent({
     setNoticeIds(noticeSource);
   }, [noticeSource]);
 
-  const assignedLeadIds = useMemo(
-    () => new Set(leads.map((lead) => lead.id)),
-    [leads]
-  );
-
   const includeRow = useCallback(
     (lead: Lead) => isActiveEmployeeLead(lead, userId),
     [userId]
@@ -54,6 +49,12 @@ export function EmployeeDashboardContent({
     sortDescending: true,
     includeRow,
   });
+
+  // Derive from live leads so realtime co-assign shows linked clients.
+  const assignedLeadIds = useMemo(
+    () => new Set(liveLeads.map((lead) => lead.id)),
+    [liveLeads]
+  );
 
   const filteredLeads = useMemo(
     () => filterLeads(liveLeads, leadQuery),

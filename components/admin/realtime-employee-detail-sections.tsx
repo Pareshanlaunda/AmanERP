@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import type { EmployeeDetail } from "@/lib/actions/employees";
-import type { Lead } from "@/lib/types/database";
+import { getEmployeeDetail, type EmployeeDetail } from "@/lib/actions/employees";
 import { EMPLOYEE_TYPE_LABELS } from "@/lib/types/database";
-import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { filterClients, filterLeads } from "@/lib/filters/list-search";
-import { useRealtimeRows } from "@/lib/hooks/use-realtime-rows";
+import { useRealtimeInvalidation } from "@/lib/hooks/use-realtime-record";
 import { LeadsTable } from "@/components/admin/leads-table";
 import { LostLeadsTable } from "@/components/admin/lost-leads-table";
 import { ClientsTable } from "@/components/dashboard/clients-table";
@@ -21,51 +19,37 @@ export function RealtimeEmployeeDetailSections({
   employeeId,
   initial,
 }: RealtimeEmployeeDetailSectionsProps) {
+  const [detail, setDetail] = useState(initial);
   const [activeQuery, setActiveQuery] = useState("");
   const [clientQuery, setClientQuery] = useState("");
   const [lostQuery, setLostQuery] = useState("");
 
-  const includeLead = useCallback(
-    (lead: Lead) => lead.assigned_to === employeeId,
-    [employeeId]
+  const refresh = useCallback(() => {
+    void getEmployeeDetail(employeeId)
+      .then(setDetail)
+      .catch((err) => {
+        console.error("[employee-detail] refresh failed", err);
+      });
+  }, [employeeId]);
+
+  // Full refetch keeps primary + co-assignee leads in sync (filter-only realtime dropped extras).
+  useRealtimeInvalidation(
+    `admin:employee-detail:${employeeId}`,
+    ["leads", "client_onboardings", "lead_additional_assignees"],
+    refresh
   );
-
-  const includeClient = useCallback(
-    (client: ClientOnboarding) => client.submitted_by === employeeId,
-    [employeeId]
-  );
-
-  const liveLeads = useRealtimeRows({
-    table: "leads",
-    initialRows: initial.leads,
-    channelName: `admin:employee-leads:${employeeId}`,
-    filter: `assigned_to=eq.${employeeId}`,
-    sortBy: "assigned_at",
-    sortDescending: true,
-    includeRow: includeLead,
-  });
-
-  const liveClients = useRealtimeRows({
-    table: "client_onboardings",
-    initialRows: initial.clients,
-    channelName: `admin:employee-clients:${employeeId}`,
-    filter: `submitted_by=eq.${employeeId}`,
-    sortBy: "created_at",
-    sortDescending: true,
-    includeRow: includeClient,
-  });
 
   const activeLeads = useMemo(
-    () => liveLeads.filter((lead) => lead.status !== "lost"),
-    [liveLeads]
+    () => detail.leads.filter((lead) => lead.status !== "lost"),
+    [detail.leads]
   );
   const lostLeads = useMemo(
-    () => liveLeads.filter((lead) => lead.status === "lost"),
-    [liveLeads]
+    () => detail.leads.filter((lead) => lead.status === "lost"),
+    [detail.leads]
   );
   const convertedCount = useMemo(
-    () => liveLeads.filter((lead) => lead.status === "converted").length,
-    [liveLeads]
+    () => detail.leads.filter((lead) => lead.status === "converted").length,
+    [detail.leads]
   );
 
   const filteredActiveLeads = useMemo(
@@ -73,8 +57,8 @@ export function RealtimeEmployeeDetailSections({
     [activeLeads, activeQuery]
   );
   const filteredClients = useMemo(
-    () => filterClients(liveClients, clientQuery),
-    [liveClients, clientQuery]
+    () => filterClients(detail.clients, clientQuery),
+    [detail.clients, clientQuery]
   );
   const filteredLostLeads = useMemo(
     () => filterLeads(lostLeads, lostQuery),
@@ -91,10 +75,10 @@ export function RealtimeEmployeeDetailSections({
           <div className="md:hidden">
             <p className="text-sm text-muted-foreground">Employee type</p>
             <p className="font-medium">
-              {EMPLOYEE_TYPE_LABELS[initial.employee_type ?? "general"]}
+              {EMPLOYEE_TYPE_LABELS[detail.employee_type ?? "general"]}
             </p>
             <p className="mt-3 text-sm text-muted-foreground">Email</p>
-            <p className="break-all font-medium">{initial.email ?? "—"}</p>
+            <p className="break-all font-medium">{detail.email ?? "—"}</p>
             <div className="mobile-stat-grid mt-4">
               <div className="mobile-stat-item">
                 <div className="mobile-stat-label">Active leads</div>
@@ -106,7 +90,7 @@ export function RealtimeEmployeeDetailSections({
               </div>
               <div className="mobile-stat-item">
                 <div className="mobile-stat-label">Clients</div>
-                <div className="mobile-stat-value">{liveClients.length}</div>
+                <div className="mobile-stat-value">{detail.clients.length}</div>
               </div>
               <div className="mobile-stat-item">
                 <div className="mobile-stat-label">Converted</div>
@@ -119,12 +103,12 @@ export function RealtimeEmployeeDetailSections({
             <div>
               <div className="text-muted-foreground">Employee type</div>
               <div className="font-medium">
-                {EMPLOYEE_TYPE_LABELS[initial.employee_type ?? "general"]}
+                {EMPLOYEE_TYPE_LABELS[detail.employee_type ?? "general"]}
               </div>
             </div>
             <div>
               <div className="text-muted-foreground">Email</div>
-              <div className="font-medium">{initial.email ?? "—"}</div>
+              <div className="font-medium">{detail.email ?? "—"}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Active leads</div>
@@ -141,7 +125,7 @@ export function RealtimeEmployeeDetailSections({
             <div>
               <div className="text-muted-foreground">Onboarded clients</div>
               <div className="font-medium">
-                <span className="stat-pill">{liveClients.length}</span>
+                <span className="stat-pill">{detail.clients.length}</span>
               </div>
             </div>
             <div>
@@ -177,7 +161,7 @@ export function RealtimeEmployeeDetailSections({
 
       <CollapsiblePanel
         title="Onboarded clients"
-        subtitle={`${filteredClients.length} of ${liveClients.length} clients with assigned CLIDs`}
+        subtitle={`${filteredClients.length} of ${detail.clients.length} clients with assigned CLIDs`}
         search={{
           value: clientQuery,
           onChange: setClientQuery,
@@ -189,7 +173,7 @@ export function RealtimeEmployeeDetailSections({
           showClientId
           viewLinkPrefix="/admin/clients"
           emptyMessage={
-            liveClients.length > 0 && filteredClients.length === 0
+            detail.clients.length > 0 && filteredClients.length === 0
               ? "No clients match your search."
               : undefined
           }

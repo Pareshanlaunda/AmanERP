@@ -91,6 +91,10 @@ export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadO
         return;
       }
 
+      if (result.warning) {
+        toast.warning(result.warning);
+      }
+
       if (category === "drop") {
         toast.success("Lead marked as lost");
         router.push("/employee/dashboard");
@@ -98,7 +102,11 @@ export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadO
       }
 
       if (category === "successful") {
-        toast.success("Lead marked successful — admin has been notified");
+        toast.success(
+          result.warning
+            ? "Lead converted to client"
+            : "Lead converted to client — admin notified"
+        );
         return;
       }
 

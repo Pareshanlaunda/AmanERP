@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mergeLeadRealtimeRow } from "@/lib/leads/assignees";
 import type { Lead } from "@/lib/types/database";
 
 type LeadLiveContextValue = {
@@ -46,7 +47,7 @@ export function LeadLiveProvider({ initialLead, children }: LeadLiveProviderProp
           filter: `id=eq.${initialLead.id}`,
         },
         (payload) => {
-          setLead(payload.new as Lead);
+          setLead((prev) => mergeLeadRealtimeRow(prev, payload.new as Lead));
         }
       )
       .subscribe();
@@ -105,7 +106,7 @@ export function useLeadLiveOrSubscribe(initialLead: Lead): LeadLiveContextValue 
           filter: `id=eq.${initialLead.id}`,
         },
         (payload) => {
-          setFallbackLead(payload.new as Lead);
+          setFallbackLead((prev) => mergeLeadRealtimeRow(prev, payload.new as Lead));
         }
       )
       .subscribe();

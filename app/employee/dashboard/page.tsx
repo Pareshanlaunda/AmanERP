@@ -24,8 +24,9 @@ export default async function EmployeeDashboardPage() {
       .eq("assigned_to", current.id)
       .neq("status", "converted")
       .neq("status", "lost")
+      .neq("status", "successful")
       .order("assigned_at", { ascending: false })
-      .limit(100),
+      .limit(500),
     supabase
       .from("lead_additional_assignees")
       .select("lead_id")
@@ -36,18 +37,31 @@ export default async function EmployeeDashboardPage() {
         "id, client_id, client_name, client_email, client_contact_number, loan_amount, advocate_name, created_at, submitted_by, lead_id"
       )
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(500),
   ]);
+
+  if (primaryResult.error || additionalLinks.error || clientsResult.error) {
+    console.error("[employee-dashboard] load failed", {
+      primary: primaryResult.error?.message,
+      additional: additionalLinks.error?.message,
+      clients: clientsResult.error?.message,
+    });
+    throw new Error("Unable to load dashboard. Refresh and try again.");
+  }
 
   const clients = (clientsResult.data ?? []) as ClientOnboarding[];
   const clientIds = clients.map((c) => c.id);
   const noticeMap: Record<string, string> = {};
   if (clientIds.length > 0) {
-    const { data: notices } = await supabase
+    const { data: notices, error: noticesError } = await supabase
       .from("client_notices")
       .select("id, client_onboarding_id, created_at")
       .in("client_onboarding_id", clientIds)
       .order("created_at", { ascending: false });
+    if (noticesError) {
+      console.error("[employee-dashboard] notices failed", noticesError.message);
+      throw new Error("Unable to load dashboard. Refresh and try again.");
+    }
     for (const row of notices ?? []) {
       const cid = row.client_onboarding_id as string;
       if (!noticeMap[cid]) noticeMap[cid] = row.id as string;
@@ -61,13 +75,18 @@ export default async function EmployeeDashboardPage() {
 
   let additionalLeads: Lead[] = [];
   if (additionalLeadIds.length > 0) {
-    const { data } = await supabase
+    const { data, error: extraError } = await supabase
       .from("leads")
       .select(LEAD_SELECT)
       .in("id", additionalLeadIds)
       .neq("status", "converted")
       .neq("status", "lost")
+      .neq("status", "successful")
       .order("assigned_at", { ascending: false });
+    if (extraError) {
+      console.error("[employee-dashboard] additional leads fetch failed", extraError.message);
+      throw new Error("Unable to load dashboard. Refresh and try again.");
+    }
     additionalLeads = (data ?? []) as Lead[];
   }
 

@@ -5,6 +5,7 @@ export function isActiveEmployeeLead(lead: Lead, userId: string) {
   return (
     isEmployeeOnLead(lead, userId) &&
     lead.status !== "converted" &&
-    lead.status !== "lost"
+    lead.status !== "lost" &&
+    lead.status !== "successful"
   );
 }
