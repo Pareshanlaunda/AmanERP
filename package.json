@@ -2,6 +2,9 @@
   "name": "aman-onboarding",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -55,5 +58,15 @@
     "pg": "^8.22.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.10",
+    "uuid": "^11.1.1",
+    "xmldom": "npm:@xmldom/xmldom@0.9.10",
+    "glob": "^13.0.0",
+    "exceljs": {
+      "archiver": "^7.0.1",
+      "unzipper": "^0.12.3"
+    }
   }
 }
