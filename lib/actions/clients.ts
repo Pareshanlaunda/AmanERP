@@ -10,19 +10,9 @@ import {
   normalizeAdditionalAssigneeIds,
   replaceAdditionalAssignees,
 } from "@/lib/leads/assignees";
-import { z } from "zod";
+import { assignClientSchema, type AssignClientInput } from "@/lib/validations/clients";
 
 export type ActionResult = { success: true } | { success: false; error: string };
-
-export const assignClientSchema = z.object({
-  client_id: z.string().uuid(),
-  submitted_by: z.string().uuid(),
-  additional_assignee_ids: z.array(z.string().uuid()).optional(),
-  /** When true (default), also sync linked lead primary + additional assignees. */
-  sync_lead: z.boolean().optional().default(true),
-});
-
-export type AssignClientInput = z.infer<typeof assignClientSchema>;
 
 export async function assignClient(data: AssignClientInput): Promise<ActionResult> {
   const user = await requireUserWithRole(["admin"]);
@@ -44,6 +34,23 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
 
   const previousOwner = client.submitted_by as string;
   const newOwner = parsed.data.submitted_by;
+  const handoffFrom = parsed.data.from_owner_id;
+
+  if (handoffFrom && newOwner === handoffFrom) {
+    return { success: false, error: "Select a different employee" };
+  }
+
+  if (handoffFrom && previousOwner === newOwner) {
+    return { success: true };
+  }
+
+  if (handoffFrom && previousOwner !== handoffFrom) {
+    return {
+      success: false,
+      error: "This client is no longer owned by this employee. Refresh the page.",
+    };
+  }
+
   const additionalIds = normalizeAdditionalAssigneeIds(
     newOwner,
     parsed.data.additional_assignee_ids
@@ -66,34 +73,61 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
   const employeeIds = [...new Set([newOwner, ...additionalIds])];
   const { data: profiles, error: profileError } = await createAdminClient()
     .from("profiles")
-    .select("id, role")
+    .select("id, role, is_active")
     .in("id", employeeIds);
 
   if (
     profileError ||
     !profiles ||
     profiles.length !== employeeIds.length ||
-    profiles.some((p) => p.role !== "employee")
+    profiles.some((p) => p.role !== "employee") ||
+    profiles.some((p) => p.is_active === false)
   ) {
-    return { success: false, error: "Selected user is not an employee" };
+    return { success: false, error: "Selected user is not an active employee" };
   }
 
   if (primaryChanged) {
-    const { error } = await supabase
+    const clientWriter = handoffFrom ? createAdminClient() : supabase;
+    let ownerQuery = clientWriter
       .from("client_onboardings")
       .update({
         submitted_by: newOwner,
         updated_at: new Date().toISOString(),
       })
       .eq("id", parsed.data.client_id);
+    if (handoffFrom) {
+      ownerQuery = ownerQuery.eq("submitted_by", handoffFrom);
+    }
+
+    const { data: ownerRows, error } = await ownerQuery.select("id");
 
     if (error) {
       return { success: false, error: publicActionError("Unable to reassign client", error) };
     }
+    if (handoffFrom && !ownerRows?.length) {
+      const { data: latest } = await createAdminClient()
+        .from("client_onboardings")
+        .select("submitted_by")
+        .eq("id", parsed.data.client_id)
+        .maybeSingle();
+      if (latest?.submitted_by === newOwner) {
+        revalidateClientMutation(parsed.data.client_id, {
+          previousOwnerId: handoffFrom,
+          newOwnerId: newOwner,
+          leadId,
+        });
+        return { success: true };
+      }
+      return {
+        success: false,
+        error: "Client ownership changed. Refresh the page and try again.",
+      };
+    }
   }
 
   if (parsed.data.sync_lead !== false && leadId) {
-    const { data: linkedLead } = await supabase
+    const leadWriter = handoffFrom ? createAdminClient() : supabase;
+    const { data: linkedLead } = await leadWriter
       .from("leads")
       .select("id, status, assigned_to")
       .eq("id", leadId)
@@ -109,7 +143,7 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
             ? "assigned"
             : currentStatus;
 
-      const { error: leadError } = await supabase
+      const { error: leadError } = await leadWriter
         .from("leads")
         .update({
           assigned_to: newOwner,

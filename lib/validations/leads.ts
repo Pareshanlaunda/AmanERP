@@ -38,6 +38,8 @@ export const createLeadSchema = z.object({
 export const assignLeadSchema = z.object({
   lead_id: z.string().uuid(),
   assigned_to: z.string().uuid(),
+  /** When set (employee removal handoff), update only if primary is still this employee. */
+  from_employee_id: z.string().uuid().optional(),
   additional_assignee_ids: z.array(z.string().uuid()).optional(),
   assignment_comment: z.string().optional(),
 });

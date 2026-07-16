@@ -38,6 +38,12 @@ export async function signOut() {
   redirect("/");
 }
 
+export async function signOutIdle() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/?session=idle");
+}
+
 async function getClientIp(): Promise<string> {
   const hdrs = await headers();
   return clientIpFromHeaders(hdrs);

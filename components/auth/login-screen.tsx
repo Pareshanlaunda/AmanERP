@@ -1,5 +1,7 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
+import { SessionLoginAlerts } from "@/components/auth/session-login-alerts";
 import { AuthThemeToggle } from "@/components/shared/theme-toggle";
 import { BRAND_LOGO_SRC, BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 
@@ -35,6 +37,9 @@ export function LoginScreen() {
         </section>
 
         <section className="flex flex-col items-center justify-center px-4 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+          <Suspense fallback={null}>
+            <SessionLoginAlerts />
+          </Suspense>
           <LoginForm />
         </section>
       </div>

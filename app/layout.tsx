@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ResponsiveToaster } from "@/components/ui/responsive-toaster";
+import { SessionIdleGuard } from "@/components/auth/session-idle-guard";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import "./globals.css";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
       <body className={`${display.variable} ${body.variable} ${mono.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
+          <SessionIdleGuard />
           <ResponsiveToaster />
         </ThemeProvider>
       </body>
