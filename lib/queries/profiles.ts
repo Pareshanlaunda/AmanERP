@@ -41,7 +41,7 @@ export async function getAuthorNamesFromComments(
   return getAuthorNamesForIds(authorIds);
 }
 
-export async function getEmployeeProfilesFromDb(): Promise<
+export async function getEmployeeProfilesFromDb(options?: { activeOnly?: boolean }): Promise<
   {
     id: string;
     employee_code: string | null;
@@ -50,15 +50,24 @@ export async function getEmployeeProfilesFromDb(): Promise<
     employee_type: string | null;
     address: string | null;
     mobile: string | null;
+    is_active: boolean;
+    deactivated_at: string | null;
     created_at: string;
   }[]
 > {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("profiles")
-    .select("id, employee_code, full_name, role, employee_type, address, mobile, created_at")
-    .eq("role", "employee")
-    .order("full_name", { ascending: true });
+    .select(
+      "id, employee_code, full_name, role, employee_type, address, mobile, is_active, deactivated_at, created_at"
+    )
+    .eq("role", "employee");
+
+  if (options?.activeOnly !== false) {
+    query = query.eq("is_active", true);
+  }
+
+  const { data, error } = await query.order("full_name", { ascending: true });
 
   if (error) {
     console.error("[profiles] getEmployeeProfilesFromDb failed", error.message);

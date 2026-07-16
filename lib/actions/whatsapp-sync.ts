@@ -1,23 +1,23 @@
 "use server";
 
 import { requireUserWithRole } from "@/lib/auth/get-user";
-import { syncRecentWhatsAppLeadsFromBotbiz } from "@/lib/botbiz/sync-subscribers";
+import { syncAllWhatsAppLeadsFromBotbiz } from "@/lib/botbiz/sync-subscribers";
 import { publicBotbizError } from "@/lib/errors/public-error";
 import { revalidatePath } from "next/cache";
 
 /**
- * Admin: pull recent Botbiz WhatsApp contacts into ERP as leads.
- * Safe to call often — createWhatsAppLeadFromPayload dedupes by phone/subscriber.
+ * Admin: paginated Botbiz pull into ERP. Does not cap stored leads — webhook + full sync.
  */
 export async function syncWhatsAppLeadsAction(): Promise<{
   success: boolean;
   created: number;
   updated: number;
+  pages?: number;
   error?: string;
 }> {
   await requireUserWithRole(["admin"]);
 
-  const result = await syncRecentWhatsAppLeadsFromBotbiz({ limit: 40 });
+  const result = await syncAllWhatsAppLeadsFromBotbiz();
   if (!result.ok) {
     return {
       success: false,
@@ -35,5 +35,6 @@ export async function syncWhatsAppLeadsAction(): Promise<{
     success: true,
     created: result.created,
     updated: result.updated,
+    pages: result.pages,
   };
 }

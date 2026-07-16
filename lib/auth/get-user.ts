@@ -21,7 +21,7 @@ export async function getUserWithRole(): Promise<UserWithRole | null> {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, role, employee_type, employee_code, address, mobile, created_at"
+      "id, full_name, role, employee_type, employee_code, address, mobile, is_active, deactivated_at, created_at"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -30,6 +30,7 @@ export async function getUserWithRole(): Promise<UserWithRole | null> {
 
   const role = profile.role as UserRole;
   if (role !== "admin" && role !== "employee") return null;
+  if (profile.is_active === false) return null;
 
   return {
     id: user.id,

@@ -74,7 +74,14 @@ export function AssignedLeadsTable({
           <TableBody>
             {displayLeads.map((lead) => (
               <TableRow key={lead.id}>
-                <TableCell className="font-medium">{lead.client_name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/employee/leads/${lead.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {lead.client_name}
+                  </Link>
+                </TableCell>
                 <TableCell>{lead.client_phone ?? "—"}</TableCell>
                 <TableCell>
                   <StatusBadge status={lead.status} />
@@ -125,7 +132,12 @@ export function AssignedLeadsTable({
           <div key={lead.id} className="data-card">
             <div className="data-card-header">
               <div>
-                <div className="data-card-title">{lead.client_name}</div>
+                <Link
+                  href={`/employee/leads/${lead.id}`}
+                  className="data-card-title text-primary hover:underline"
+                >
+                  {lead.client_name}
+                </Link>
                 <p className="mt-1 text-muted-foreground">{lead.client_phone ?? "No phone"}</p>
               </div>
               <StatusBadge status={lead.status} />

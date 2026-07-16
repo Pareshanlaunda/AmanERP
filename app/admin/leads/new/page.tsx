@@ -1,8 +1,37 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { requireUserWithRole } from "@/lib/auth/get-user";
+import { getEmployeeProfilesForAdmin } from "@/lib/actions/employees";
+import { getNotifications } from "@/lib/actions/notifications";
+import { AppHeader } from "@/components/shared/app-header";
+import { CreateLeadForm } from "@/components/admin/create-lead-form";
+import { Button } from "@/components/ui/button";
 
-/** Manual create disabled — leads come from WhatsApp webhook only. */
 export default async function NewLeadPage() {
-  await requireUserWithRole(["admin"]);
-  redirect("/admin/dashboard");
+  const current = await requireUserWithRole(["admin"]);
+  const [notifications, employees] = await Promise.all([
+    getNotifications(),
+    getEmployeeProfilesForAdmin(),
+  ]);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <AppHeader
+        title="Create lead"
+        subtitle={current.email}
+        userId={current.id}
+        notifications={notifications}
+        leadLinkPrefix="/admin/leads"
+      />
+      <main className="page-container-narrow space-y-6">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link href="/admin/dashboard">
+            <ArrowLeft className="h-4 w-4" />
+            Back to dashboard
+          </Link>
+        </Button>
+        <CreateLeadForm employees={employees} />
+      </main>
+    </div>
+  );
 }

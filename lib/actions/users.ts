@@ -1,10 +1,19 @@
 "use server";
 
-import { revalidateAfterUserCreated } from "@/lib/revalidate";
+import { revalidateAfterEmployeeMembershipChange, revalidateAfterUserCreated } from "@/lib/revalidate";
 import { requireUserWithRole } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listAllAuthUsers } from "@/lib/queries/auth-users";
-import { createUserSchema, adminResetPasswordSchema, type CreateUserInput, type AdminResetPasswordInput } from "@/lib/validations/users";
+import {
+  createUserSchema,
+  adminResetPasswordSchema,
+  deactivateEmployeeSchema,
+  reactivateEmployeeSchema,
+  type CreateUserInput,
+  type AdminResetPasswordInput,
+  type DeactivateEmployeeInput,
+  type ReactivateEmployeeInput,
+} from "@/lib/validations/users";
 import type { Profile } from "@/lib/types/database";
 
 export type ActionResult = { success: true } | { success: false; error: string };
@@ -129,5 +138,154 @@ export async function adminResetUserPassword(
     return { success: false, error: "Unable to reset password" };
   }
 
+  return { success: true };
+}
+
+import { CLOSED_LEAD_STATUSES } from "@/lib/leads/lead-status";
+
+/** Soft-remove employee: deactivate profile, ban login, keep audit history. */
+export async function deactivateEmployee(
+  data: DeactivateEmployeeInput
+): Promise<ActionResult> {
+  const current = await requireUserWithRole(["admin"]);
+
+  const parsed = deactivateEmployeeSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  const employeeId = parsed.data.employee_id;
+  if (employeeId === current.id) {
+    return { success: false, error: "You cannot remove your own account" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("id, role, is_active, full_name")
+    .eq("id", employeeId)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    return { success: false, error: "Employee not found" };
+  }
+  if (profile.role !== "employee") {
+    return { success: false, error: "Only employees can be removed from the team" };
+  }
+  if (profile.is_active === false) {
+    return { success: false, error: "Employee is already removed" };
+  }
+
+  const { count: activePrimaryCount, error: activeLeadsError } = await admin
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("assigned_to", employeeId)
+    .not("status", "in", `(${CLOSED_LEAD_STATUSES.join(",")})`);
+
+  if (activeLeadsError) {
+    console.error("[users] deactivateEmployee active-leads check failed", activeLeadsError.message);
+    return { success: false, error: "Unable to verify employee assignments" };
+  }
+
+  if ((activePrimaryCount ?? 0) > 0) {
+    return {
+      success: false,
+      error: `Reassign ${activePrimaryCount} active lead${activePrimaryCount === 1 ? "" : "s"} first, then remove this employee.`,
+    };
+  }
+
+  const { error: coAssigneeError } = await admin
+    .from("lead_additional_assignees")
+    .delete()
+    .eq("employee_id", employeeId);
+
+  if (coAssigneeError) {
+    console.error("[users] deactivateEmployee co-assignee cleanup failed", coAssigneeError.message);
+    return { success: false, error: "Unable to remove employee from co-assignments" };
+  }
+
+  const deactivatedAt = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("profiles")
+    .update({ is_active: false, deactivated_at: deactivatedAt })
+    .eq("id", employeeId);
+
+  if (updateError) {
+    console.error("[users] deactivateEmployee profile update failed", updateError.message);
+    return { success: false, error: "Unable to remove employee" };
+  }
+
+  const { error: banError } = await admin.auth.admin.updateUserById(employeeId, {
+    ban_duration: "876000h",
+  });
+
+  if (banError) {
+    console.error("[users] deactivateEmployee auth ban failed", banError.message);
+    await admin
+      .from("profiles")
+      .update({ is_active: true, deactivated_at: null })
+      .eq("id", employeeId);
+    return { success: false, error: "Unable to revoke employee login" };
+  }
+
+  revalidateAfterEmployeeMembershipChange(employeeId);
+  return { success: true };
+}
+
+/** Restore removed employee: reactivate profile and lift auth ban. */
+export async function reactivateEmployee(
+  data: ReactivateEmployeeInput
+): Promise<ActionResult> {
+  await requireUserWithRole(["admin"]);
+
+  const parsed = reactivateEmployeeSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  const employeeId = parsed.data.employee_id;
+  const admin = createAdminClient();
+
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("id, role, is_active, deactivated_at")
+    .eq("id", employeeId)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    return { success: false, error: "Employee not found" };
+  }
+  if (profile.role !== "employee") {
+    return { success: false, error: "Only employees can be reactivated" };
+  }
+  if (profile.is_active !== false) {
+    return { success: false, error: "Employee is already active" };
+  }
+
+  const { error: updateError } = await admin
+    .from("profiles")
+    .update({ is_active: true, deactivated_at: null })
+    .eq("id", employeeId);
+
+  if (updateError) {
+    console.error("[users] reactivateEmployee profile update failed", updateError.message);
+    return { success: false, error: "Unable to reactivate employee" };
+  }
+
+  const { error: unbanError } = await admin.auth.admin.updateUserById(employeeId, {
+    ban_duration: "none",
+  });
+
+  if (unbanError) {
+    console.error("[users] reactivateEmployee auth unban failed", unbanError.message);
+    await admin
+      .from("profiles")
+      .update({ is_active: false, deactivated_at: profile.deactivated_at })
+      .eq("id", employeeId);
+    return { success: false, error: "Unable to restore employee login" };
+  }
+
+  revalidateAfterEmployeeMembershipChange(employeeId);
   return { success: true };
 }

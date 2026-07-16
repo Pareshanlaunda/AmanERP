@@ -6,29 +6,39 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { publicActionError } from "@/lib/errors/public-error";
 import {
+  revalidateAfterLeadCreated,
   revalidateEmployeeDetail,
   revalidateLeadMutation,
 } from "@/lib/revalidate";
 import {
   addLeadUpdateSchema,
   assignLeadSchema,
+  createLeadSchema,
   type AddLeadUpdateInput,
   type AssignLeadInput,
+  type CreateLeadInput,
 } from "@/lib/validations/leads";
 import {
   formatOutcomeSummary,
   leadOutcomeSchema,
   type LeadOutcomeInput,
 } from "@/lib/validations/lead-outcomes";
-import type { LeadStatus, OutcomeCategory } from "@/lib/types/database";
+import type { LeadStatus, OutcomeCategory, Lead } from "@/lib/types/database";
 import {
   listAdditionalAssigneeIds,
+  listAdditionalAssigneeIdsForLeads,
   normalizeAdditionalAssigneeIds,
   replaceAdditionalAssignees,
 } from "@/lib/leads/assignees";
+import { normalizePhone } from "@/lib/botbiz/normalize-phone";
+import {
+  ADMIN_LEAD_SEARCH_MIN_CHARS,
+  DASHBOARD_LEADS_PAGE_SIZE,
+} from "@/lib/leads/dashboard-limits";
+import { fetchAdminLeadsPage } from "@/lib/leads/fetch-admin-leads-page";
 
 export type ActionResult =
-  | { success: true; warning?: string }
+  | { success: true; warning?: string; leadId?: string }
   | { success: false; error: string };
 
 /** Service role so employee→admin notify works (RLS would drop non-admin targets). */
@@ -80,11 +90,12 @@ async function assertEmployeeIds(ids: string[]): Promise<string | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("profiles")
-    .select("id, role")
+    .select("id, role, is_active")
     .in("id", unique);
   if (error) return publicActionError("Unable to verify employees", error);
   if (!data || data.length !== unique.length) return "Selected user is not an employee";
   if (data.some((row) => row.role !== "employee")) return "Selected user is not an employee";
+  if (data.some((row) => row.is_active === false)) return "Selected employee is no longer active";
   return null;
 }
 
@@ -170,6 +181,167 @@ async function getLeadForAssignee<T extends { assigned_to?: string | null }>(
   if (additional.includes(userId)) return row;
 
   return null;
+}
+
+function normalizeLeadPhone(value: string | undefined): string | null {
+  if (!value?.trim()) return null;
+  const normalized = normalizePhone(value);
+  if (!normalized || normalized.length < 10) return null;
+  return normalized;
+}
+
+export async function createLead(data: CreateLeadInput): Promise<ActionResult> {
+  const user = await requireUserWithRole(["admin"]);
+  const parsed = createLeadSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message ?? "Invalid data" };
+  }
+
+  const assignedTo = parsed.data.assigned_to ?? null;
+  const assignmentComment = parsed.data.assignment_comment?.trim() || null;
+  const isAssigned = Boolean(assignedTo);
+  const additionalIds = isAssigned && assignedTo
+    ? normalizeAdditionalAssigneeIds(assignedTo, parsed.data.additional_assignee_ids)
+    : [];
+
+  if (isAssigned && assignedTo) {
+    const employeeCheck = await assertEmployeeIds([assignedTo, ...additionalIds]);
+    if (employeeCheck) return { success: false, error: employeeCheck };
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .insert({
+      client_name: parsed.data.client_name.trim(),
+      client_phone: normalizeLeadPhone(parsed.data.client_phone),
+      client_alternate_phone: normalizeLeadPhone(parsed.data.client_alternate_phone),
+      client_email: parsed.data.client_email?.trim() || null,
+      loan_amount: parsed.data.loan_amount ?? null,
+      personal_loan_amount_range: parsed.data.personal_loan_amount_range?.trim() || null,
+      credit_card_amount_range: parsed.data.credit_card_amount_range?.trim() || null,
+      loan_type: parsed.data.loan_type ?? null,
+      harassment_faced: parsed.data.harassment_faced ?? null,
+      notes: parsed.data.notes?.trim() || null,
+      source: "manual",
+      status: isAssigned ? "assigned" : "new",
+      created_by: user.id,
+      assigned_to: assignedTo,
+      assigned_at: isAssigned ? now : null,
+      assignment_comment: isAssigned ? assignmentComment : null,
+      updated_at: now,
+    })
+    .select("id, client_name")
+    .single();
+
+  if (error) {
+    return { success: false, error: publicActionError("Unable to create lead", error) };
+  }
+
+  if (!lead) {
+    return { success: false, error: "Unable to create lead" };
+  }
+
+  const rollbackLead = async (): Promise<string | null> => {
+    const { error: deleteError } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (deleteError) {
+      console.error("[createLead] rollback failed", deleteError.message);
+      return publicActionError(
+        "Lead partially created and could not be rolled back — check the dashboard",
+        deleteError
+      );
+    }
+    return null;
+  };
+
+  if (isAssigned && assignedTo) {
+    const { error: additionalError } = await replaceAdditionalAssignees(supabase, {
+      leadId: lead.id,
+      employeeIds: additionalIds,
+      assignedBy: user.id,
+    });
+    if (additionalError) {
+      const rollbackMsg = await rollbackLead();
+      return {
+        success: false,
+        error:
+          rollbackMsg ?? publicActionError("Unable to assign additional employees", additionalError),
+      };
+    }
+
+    let notifyOk = true;
+    notifyOk =
+      (await notifyAssignees({
+        userIds: [assignedTo],
+        clientName: lead.client_name,
+        leadId: lead.id,
+        assignmentComment,
+      })) && notifyOk;
+
+    if (additionalIds.length > 0) {
+      notifyOk =
+        (await notifyAssignees({
+          userIds: additionalIds,
+          clientName: lead.client_name,
+          leadId: lead.id,
+          assignmentComment,
+          additional: true,
+        })) && notifyOk;
+    }
+
+    revalidateAfterLeadCreated(lead.id);
+    return notifyOk
+      ? { success: true, leadId: lead.id }
+      : {
+          success: true,
+          leadId: lead.id,
+          warning: "Lead created, but notification failed — tell the employee manually",
+        };
+  }
+
+  revalidateAfterLeadCreated(lead.id);
+  return { success: true, leadId: lead.id };
+}
+
+export type SearchAdminLeadsResult =
+  | { success: true; leads: Lead[]; totalCount: number; page: number; pageSize: number }
+  | { success: false; error: string };
+
+export type ListAdminLeadsPageResult = SearchAdminLeadsResult;
+
+/** Paginated admin lead list — browse all rows or search with exact counts. */
+export async function listAdminLeadsPage(params?: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  queue?: "inbox" | "all";
+}): Promise<ListAdminLeadsPageResult> {
+  await requireUserWithRole(["admin"]);
+
+  try {
+    const supabase = await createClient();
+    const result = await fetchAdminLeadsPage(supabase, params);
+    return { success: true, ...result };
+  } catch (error) {
+    const detail =
+      error && typeof error === "object" && "message" in error
+        ? (error as { message?: string })
+        : null;
+    return {
+      success: false,
+      error: publicActionError("Unable to load leads", detail),
+    };
+  }
+}
+
+/** @deprecated use listAdminLeadsPage */
+export async function searchAdminLeads(
+  rawQuery: string,
+  page = 1
+): Promise<SearchAdminLeadsResult> {
+  return listAdminLeadsPage({ query: rawQuery, page });
 }
 
 export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {

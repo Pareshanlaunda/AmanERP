@@ -1,0 +1,31 @@
+---
+description: AMAN is a legal-ops CRM — plan first, CRM patterns, push back when ideas don't fit
+alwaysApply: true
+---
+
+# Product: CRM + legal ops (not full ERP)
+
+This repo is **AMAN CRM** in practice: lead intake, pipeline, assignment, WhatsApp (Botbiz), client onboarding, notices, notifications. It is **not** a classic ERP (no GL, inventory, payroll, procurement).
+
+Repo name may say "ERP"; treat scope as **CRM + firm operations**.
+
+# Mandatory workflow for every requirement
+
+Before writing code:
+
+1. **Plan block** — goal, CRM pattern to use, what we reuse, security/RLS, limits (DB vs UI).
+2. **CRM research** — how Salesforce/HubSpot/Zoho-style CRMs handle the same need (paginated lists, webhook intake, role-based pipeline, server search, audit trail). Prefer industry norm over one-off UI.
+3. **Push back when needed** — if the user asks for something anti-pattern (load all rows, cap stored leads, mute security scanners, client-trusted source fields), **say no**, explain why, propose the CRM-standard alternative, then implement that unless they override after seeing tradeoffs.
+4. **Implement lean** — reuse existing server actions, zod schemas, RLS; no invented deps.
+5. **Verify** — build/typecheck on touched paths.
+
+# CRM patterns already in this codebase
+
+- **Leads**: webhook + manual create; `source` server-forced; pipeline statuses; assignees + co-assignees.
+- **Lists**: server pagination + exact counts; search hits DB with pagination (not “load everything”).
+- **WhatsApp**: chat only when `source === "whatsapp"`; server guard on chat actions.
+- **Auth**: admin vs employee; Supabase RLS; generic public errors.
+
+# When user says "/xuyhan"
+
+Same plan-first + CRM-norm workflow; lean implement; caveman tone unless they say normal mode.

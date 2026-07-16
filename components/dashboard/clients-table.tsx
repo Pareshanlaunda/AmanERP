@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { useEffect, useMemo, useState } from "react";
 import { filterClients } from "@/lib/filters/list-search";
+import { clientHasWhatsAppChat } from "@/lib/leads/attach-lead-sources";
 
 /** Stable default — inline `= {}` is a new object every render and loops useEffect. */
 const EMPTY_NOTICE_IDS: Record<string, string> = Object.freeze({});
@@ -122,7 +123,7 @@ export function ClientsTable({
                           <Button variant="outline" size="sm" asChild>
                             <Link href={`${viewLinkPrefix}/${client.id}`}>View</Link>
                           </Button>
-                          {client.lead_id ? (
+                          {clientHasWhatsAppChat(client) ? (
                             <Button variant="secondary" size="sm" asChild>
                               <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>
                                 Chat
@@ -166,7 +167,7 @@ export function ClientsTable({
                         <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
                           <Link href={`${viewLinkPrefix}/${client.id}`}>View full record</Link>
                         </Button>
-                        {client.lead_id ? (
+                        {clientHasWhatsAppChat(client) ? (
                           <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
                             <Link href={`${viewLinkPrefix}/${client.id}#whatsapp-chat`}>Chat</Link>
                           </Button>
