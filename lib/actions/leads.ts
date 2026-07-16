@@ -373,6 +373,23 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
 
   const previousAdditional = await listAdditionalAssigneeIds(supabase, parsed.data.lead_id);
   const previousPrimary = lead.assigned_to as string | null;
+  const handoffFrom = parsed.data.from_employee_id;
+
+  if (handoffFrom && parsed.data.assigned_to === handoffFrom) {
+    return { success: false, error: "Select a different employee" };
+  }
+
+  if (handoffFrom && previousPrimary === parsed.data.assigned_to) {
+    return { success: true };
+  }
+
+  if (handoffFrom && previousPrimary !== handoffFrom) {
+    return {
+      success: false,
+      error: "This lead is no longer assigned to this employee. Refresh the page.",
+    };
+  }
+
   const previousComment = (lead.assignment_comment as string | null) ?? null;
   const previousAssignedAt = (lead.assigned_at as string | null) ?? null;
   // undefined = leave unchanged; explicit string (incl. "") = set / clear
@@ -383,11 +400,18 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
   const currentStatus = lead.status as string;
   // Don't pull converted/lost leads back to "assigned" when only changing owner
   const nextStatus =
-    currentStatus === "converted" || currentStatus === "lost" ? currentStatus : "assigned";
+    currentStatus === "converted" || currentStatus === "lost"
+      ? currentStatus
+      : currentStatus === "new" || currentStatus === "assigned"
+        ? "assigned"
+        : currentStatus;
   const nextAssignedAt = new Date().toISOString();
 
+  const lockPrimary = handoffFrom ?? previousPrimary;
+  const writer = handoffFrom ? createAdminClient() : supabase;
+
   // Conditional on current primary — concurrent admin assigns conflict instead of last-write-wins.
-  let assignQuery = supabase
+  let assignQuery = writer
     .from("leads")
     .update({
       assigned_to: parsed.data.assigned_to,
@@ -397,16 +421,28 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.lead_id);
-  assignQuery = previousPrimary
-    ? assignQuery.eq("assigned_to", previousPrimary)
+  assignQuery = lockPrimary
+    ? assignQuery.eq("assigned_to", lockPrimary)
     : assignQuery.is("assigned_to", null);
 
   const { data: assignedRows, error } = await assignQuery.select("id");
   if (error) return { success: false, error: publicActionError("Unable to assign lead", error) };
   if (!assignedRows?.length) {
+    if (handoffFrom) {
+      const { data: latest } = await writer
+        .from("leads")
+        .select("assigned_to")
+        .eq("id", parsed.data.lead_id)
+        .maybeSingle();
+      if (latest?.assigned_to === parsed.data.assigned_to) {
+        return { success: true };
+      }
+    }
     return {
       success: false,
-      error: "Lead was reassigned by someone else. Refresh and try again.",
+      error: handoffFrom
+        ? "Lead assignment changed. Refresh the page and try again."
+        : "Lead was reassigned by someone else. Refresh and try again.",
     };
   }
 
@@ -460,7 +496,8 @@ export async function assignLead(data: AssignLeadInput): Promise<ActionResult> {
       null;
 
     if (clientId) {
-      const { error: clientError } = await supabase
+      const clientWriter = handoffFrom ? createAdminClient() : supabase;
+      const { error: clientError } = await clientWriter
         .from("client_onboardings")
         .update({
           submitted_by: parsed.data.assigned_to,

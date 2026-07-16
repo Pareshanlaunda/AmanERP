@@ -1,15 +1,43 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { UserRole } from "@/lib/types/database";
+import {
+  SUPABASE_SESSION_COOKIE_OPTIONS,
+  toServerSessionCookieOptions,
+} from "@/lib/supabase/session-cookies";
+type ProfileAccess =
+  | { kind: "ok"; role: UserRole }
+  | { kind: "deactivated" }
+  | { kind: "missing" };
 
-async function getProfileRole(
+async function getProfileAccess(
   supabase: ReturnType<typeof createServerClient>,
   userId: string
-): Promise<UserRole | null> {
-  const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
-  const role = data?.role;
-  if (role === "admin" || role === "employee") return role;
-  return null;
+): Promise<ProfileAccess> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!data) return { kind: "missing" };
+  if (data.is_active === false) return { kind: "deactivated" };
+
+  const role = data.role;
+  if (role === "admin" || role === "employee") return { kind: "ok", role };
+  return { kind: "missing" };
+}
+
+function redirectHome(request: NextRequest, query?: Record<string, string>) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/";
+  url.search = "";
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return NextResponse.redirect(url);
 }
 
 export async function updateSession(request: NextRequest) {
@@ -19,6 +47,7 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: SUPABASE_SESSION_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -27,18 +56,12 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              httpOnly: true,
-              secure: process.env.NODE_ENV === "production",
-              sameSite: "strict",
-            })
+            supabaseResponse.cookies.set(name, value, toServerSessionCookieOptions(options))
           );
         },
       },
     }
   );
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -53,25 +76,27 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/notices");
 
   if (!user && isProtectedRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    return redirectHome(request);
   }
 
   if (user) {
-    const role = await getProfileRole(supabase, user.id);
+    const access = await getProfileAccess(supabase, user.id);
+
+    if (access.kind === "deactivated") {
+      await supabase.auth.signOut();
+      return redirectHome(request, { account: "removed" });
+    }
 
     // Auth user without usable profile → sign out (avoids / ↔ /employee loop).
-    if (!role) {
+    if (access.kind === "missing") {
       await supabase.auth.signOut();
       if (!isAuthRoute) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/";
-        return NextResponse.redirect(url);
+        return redirectHome(request);
       }
       return supabaseResponse;
     }
 
+    const role = access.role;
     const dashboard = role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
 
     if (isAuthRoute || pathname.startsWith("/setup")) {
