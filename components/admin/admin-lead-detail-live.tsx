@@ -11,6 +11,7 @@ import { LiveLeadStatus } from "@/components/shared/live-lead-status";
 import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
 import { LeadLiveProvider, useLeadLive } from "@/components/shared/lead-live-provider";
 import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
+import { PageTabs } from "@/components/shared/page-tabs";
 
 type AdminLeadDetailLiveProps = {
   lead: Lead;
@@ -55,29 +56,57 @@ function AdminWhatsAppSection({ leadId }: { leadId: string }) {
   );
 }
 
-export function AdminLeadDetailLive(props: AdminLeadDetailLiveProps) {
+function AdminLeadTabbedContent(props: AdminLeadDetailLiveProps) {
   const { lead, employees, currentUserId, comments, hasUnread, authorNames, onboarding, updates } =
     props;
+  const showWhatsApp = lead.source === "whatsapp";
 
   return (
-    <LeadLiveProvider initialLead={lead}>
-      <AdminLeadInfoSection employees={employees} />
+    <PageTabs
+      tabs={[
+        { id: "details", label: "Details", number: 1 },
+        { id: "comments", label: "Comments", number: 2 },
+        { id: "whatsapp", label: "WhatsApp", number: 3, hidden: !showWhatsApp },
+        { id: "assign", label: "Assignment", number: showWhatsApp ? 4 : 3 },
+        { id: "activity", label: "Activity", number: showWhatsApp ? 5 : 4 },
+      ]}
+    >
+      {(activeTabId) => (
+        <div className="space-y-6">
+          {activeTabId === "details" && (
+            <>
+              <AdminLeadInfoSection employees={employees} />
+              <LiveLeadOnboardingSection initialOnboarding={onboarding} />
+            </>
+          )}
 
-      <LiveLeadOnboardingSection initialOnboarding={onboarding} />
+          {activeTabId === "comments" && (
+            <LeadCommentsPanel
+              leadId={lead.id}
+              currentUserId={currentUserId}
+              comments={comments}
+              hasUnread={hasUnread}
+              authorNames={authorNames}
+            />
+          )}
 
-      <LeadCommentsPanel
-        leadId={lead.id}
-        currentUserId={currentUserId}
-        comments={comments}
-        hasUnread={hasUnread}
-        authorNames={authorNames}
-      />
+          {activeTabId === "whatsapp" && showWhatsApp && <AdminWhatsAppSection leadId={lead.id} />}
 
-      <AdminWhatsAppSection leadId={lead.id} />
+          {activeTabId === "assign" && <LiveAssignLeadSection employees={employees} />}
 
-      <LiveAssignLeadSection employees={employees} />
+          {activeTabId === "activity" && (
+            <LeadTimelinePanel leadId={lead.id} initialUpdates={updates} />
+          )}
+        </div>
+      )}
+    </PageTabs>
+  );
+}
 
-      <LeadTimelinePanel leadId={lead.id} initialUpdates={updates} />
+export function AdminLeadDetailLive(props: AdminLeadDetailLiveProps) {
+  return (
+    <LeadLiveProvider initialLead={props.lead}>
+      <AdminLeadTabbedContent {...props} />
     </LeadLiveProvider>
   );
 }

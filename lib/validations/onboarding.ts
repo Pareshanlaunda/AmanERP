@@ -114,6 +114,8 @@ export type ClientOnboarding = {
   created_at: string;
   submitted_by: string;
   lead_id: string | null;
+  /** Joined from leads when listing clients — gates WhatsApp chat UI. */
+  lead_source?: string | null;
   client_id: string | null;
   client_name: string;
   client_email: string | null;

@@ -48,6 +48,17 @@ export const adminResetPasswordSchema = z.object({
 
 export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
 
+export const deactivateEmployeeSchema = z.object({
+  employee_id: z.string().uuid("Invalid employee"),
+});
+
+export type DeactivateEmployeeInput = z.infer<typeof deactivateEmployeeSchema>;
+
+/** Same id field as deactivate — admin restores team access. */
+export const reactivateEmployeeSchema = deactivateEmployeeSchema;
+
+export type ReactivateEmployeeInput = z.infer<typeof reactivateEmployeeSchema>;
+
 export const EMPLOYEE_TYPE_FORM_OPTIONS = [
   { value: "advocate", label: "Advocate" },
   { value: "csa", label: "CSA" },

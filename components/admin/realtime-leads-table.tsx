@@ -15,6 +15,9 @@ type RealtimeLeadsTableProps = {
   mode?: "admin" | "employee-assigned";
   userId?: string;
   searchQuery?: string;
+  /** When true, search already ran on server (full DB). */
+  skipClientFilter?: boolean;
+  loading?: boolean;
 };
 
 export function RealtimeLeadsTable({
@@ -25,6 +28,8 @@ export function RealtimeLeadsTable({
   mode = "admin",
   userId,
   searchQuery = "",
+  skipClientFilter = false,
+  loading = false,
 }: RealtimeLeadsTableProps) {
   const includeRow = useCallback(
     (lead: Lead) => {
@@ -46,9 +51,17 @@ export function RealtimeLeadsTable({
   });
 
   const filteredLeads = useMemo(
-    () => filterLeads(leads, searchQuery),
-    [leads, searchQuery]
+    () => (skipClientFilter ? leads : filterLeads(leads, searchQuery)),
+    [leads, searchQuery, skipClientFilter]
   );
+
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+        Searching leads…
+      </div>
+    );
+  }
 
   return (
     <LeadsTable

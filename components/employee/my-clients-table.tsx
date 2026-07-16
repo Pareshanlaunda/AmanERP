@@ -7,6 +7,7 @@ import { ClidBadge } from "@/components/shared/clid-badge";
 import { NoticeSelectButton } from "@/components/shared/notice-select-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { clientHasWhatsAppChat } from "@/lib/leads/attach-lead-sources";
 
 export function MyClientsTable({
   clients,
@@ -94,7 +95,7 @@ export function MyClientsTable({
                     <Button variant="outline" size="sm" asChild className="h-8 px-2 text-xs">
                       <Link href={`/employee/clients/${client.id}`}>View</Link>
                     </Button>
-                    {client.lead_id ? (
+                    {clientHasWhatsAppChat(client) ? (
                       <Button variant="secondary" size="sm" asChild className="h-8 px-2 text-xs">
                         <Link href={`/employee/clients/${client.id}#whatsapp-chat`}>Chat</Link>
                       </Button>
@@ -134,7 +135,7 @@ export function MyClientsTable({
               <Button variant="outline" size="sm" asChild className="h-8 px-2 text-xs">
                 <Link href={`/employee/clients/${client.id}`}>View</Link>
               </Button>
-              {client.lead_id ? (
+              {clientHasWhatsAppChat(client) ? (
                 <Button variant="secondary" size="sm" asChild className="h-8 px-2 text-xs">
                   <Link href={`/employee/clients/${client.id}#whatsapp-chat`}>Chat</Link>
                 </Button>

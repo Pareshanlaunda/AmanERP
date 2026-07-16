@@ -8,6 +8,8 @@ import { getEmployeeProfilesFromDb } from "@/lib/queries/profiles";
 import type { EmployeeStats, Lead, Profile } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
+import { attachLeadSourcesToClients } from "@/lib/leads/attach-lead-sources";
+import { isActivePipelineLeadStatus } from "@/lib/leads/lead-status";
 
 /** Soft cap for detail tables; stats RPC remains uncapped. */
 const EMPLOYEE_DETAIL_LIST_LIMIT = 1000;
@@ -144,6 +146,8 @@ function toEmployeeStats(
     employee_type: string | null;
     address: string | null;
     mobile: string | null;
+    is_active: boolean;
+    deactivated_at: string | null;
     created_at: string;
   },
   authUser: { email?: string; user_metadata?: { full_name?: string }; created_at?: string } | undefined,
@@ -163,6 +167,8 @@ function toEmployeeStats(
     employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
     address: profile.address ?? null,
     mobile: profile.mobile ?? null,
+    is_active: profile.is_active,
+    deactivated_at: profile.deactivated_at,
     created_at: profile.created_at ?? authUser?.created_at ?? new Date().toISOString(),
     email: authUser?.email,
     assigned_count: counts?.assigned ?? 0,
@@ -201,7 +207,7 @@ async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats 
     await Promise.all([
       admin
         .from("profiles")
-        .select("id, employee_code, full_name, role, employee_type, address, mobile, created_at")
+        .select("id, employee_code, full_name, role, employee_type, address, mobile, is_active, deactivated_at, created_at")
         .eq("id", employeeId)
         .maybeSingle(),
       listAllAuthUsers(),
@@ -223,6 +229,8 @@ async function getEmployeeStatsForId(employeeId: string): Promise<EmployeeStats 
       employee_type: (profile.employee_type as string | null) ?? null,
       address: (profile.address as string | null) ?? null,
       mobile: (profile.mobile as string | null) ?? null,
+      is_active: (profile.is_active as boolean | null) ?? true,
+      deactivated_at: (profile.deactivated_at as string | null) ?? null,
       created_at: profile.created_at as string,
     },
     authUser,
@@ -257,6 +265,8 @@ export async function getEmployeeProfilesForAdmin(): Promise<(Profile & { email?
     employee_type: (profile.employee_type as Profile["employee_type"]) ?? "general",
     address: profile.address ?? null,
     mobile: profile.mobile ?? null,
+    is_active: profile.is_active ?? true,
+    deactivated_at: profile.deactivated_at ?? null,
     created_at: profile.created_at,
     email: emailById.get(profile.id),
   }));
@@ -329,15 +339,19 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
     ...lead,
     additional_assignee_ids: assigneeMap.get(lead.id) ?? [],
   }));
-  const closed = new Set(["lost", "converted", "successful"]);
-  const activeLeads = allLeads.filter((l) => !closed.has(l.status));
+  const activeLeads = allLeads.filter((l) => isActivePipelineLeadStatus(l.status));
   const lostLeads = allLeads.filter((l) => l.status === "lost");
+
+  const clients = await attachLeadSourcesToClients(
+    admin,
+    (clientsRes.data ?? []) as ClientOnboarding[]
+  );
 
   return {
     ...employee,
     leads: allLeads,
     activeLeads,
     lostLeads,
-    clients: (clientsRes.data ?? []) as ClientOnboarding[],
+    clients,
   };
 }

@@ -33,6 +33,9 @@ export type Profile = {
   employee_type: EmployeeType | null;
   address: string | null;
   mobile: string | null;
+  /** False when admin removed the employee; row kept for audit history. */
+  is_active: boolean;
+  deactivated_at: string | null;
   created_at: string;
 };
 

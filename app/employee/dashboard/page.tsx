@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/shared/app-header";
 import { EmployeeDashboardContent } from "@/components/employee/employee-dashboard-content";
 import { SuccessToast } from "@/components/dashboard/success-toast";
 import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
+import { attachLeadSourcesToClients } from "@/lib/leads/attach-lead-sources";
 
 const LEAD_SELECT =
   "id, client_name, client_phone, client_alternate_phone, client_email, notes, status, source, preferred_language, assigned_at, assigned_to, onboarding_record_id";
@@ -49,7 +50,10 @@ export default async function EmployeeDashboardPage() {
     throw new Error("Unable to load dashboard. Refresh and try again.");
   }
 
-  const clients = (clientsResult.data ?? []) as ClientOnboarding[];
+  const clients = await attachLeadSourcesToClients(
+    supabase,
+    (clientsResult.data ?? []) as ClientOnboarding[]
+  );
   const clientIds = clients.map((c) => c.id);
   const noticeMap: Record<string, string> = {};
   if (clientIds.length > 0) {

@@ -7,6 +7,7 @@ import { getNotifications } from "@/lib/actions/notifications";
 import { AppHeader } from "@/components/shared/app-header";
 import { RealtimeEmployeeDetailSections } from "@/components/admin/realtime-employee-detail-sections";
 import { Button } from "@/components/ui/button";
+import { getEmployeeProfilesForAdmin } from "@/lib/actions/employees";
 
 export default async function AdminEmployeeDetailPage({
   params,
@@ -15,9 +16,10 @@ export default async function AdminEmployeeDetailPage({
 }) {
   const current = await requireUserWithRole(["admin"]);
   const { id } = await params;
-  const [employee, notifications] = await Promise.all([
+  const [employee, notifications, employees] = await Promise.all([
     getEmployeeDetail(id),
     getNotifications(),
+    getEmployeeProfilesForAdmin(),
   ]);
 
   if (!employee) notFound();
@@ -39,7 +41,11 @@ export default async function AdminEmployeeDetailPage({
           </Link>
         </Button>
 
-        <RealtimeEmployeeDetailSections employeeId={id} initial={employee} />
+        <RealtimeEmployeeDetailSections
+          employeeId={id}
+          initial={employee}
+          employees={employees}
+        />
       </main>
     </div>
   );

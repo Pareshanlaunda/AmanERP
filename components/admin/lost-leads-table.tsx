@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Lead } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -12,9 +13,11 @@ import {
 
 export function LostLeadsTable({
   leads,
+  linkPrefix = "/admin/leads",
   emptyMessage,
 }: {
   leads: Lead[];
+  linkPrefix?: string;
   emptyMessage?: string;
 }) {
   if (leads.length === 0) {
@@ -41,7 +44,14 @@ export function LostLeadsTable({
           <TableBody>
             {leads.map((lead) => (
               <TableRow key={lead.id}>
-                <TableCell className="font-medium">{lead.client_name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`${linkPrefix}/${lead.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {lead.client_name}
+                  </Link>
+                </TableCell>
                 <TableCell>{lead.client_phone ?? "—"}</TableCell>
                 <TableCell>
                   <StatusBadge status={lead.status} />
@@ -60,7 +70,12 @@ export function LostLeadsTable({
         {leads.map((lead) => (
           <div key={lead.id} className="data-card">
             <div className="data-card-header">
-              <span className="data-card-title">{lead.client_name}</span>
+              <Link
+                href={`${linkPrefix}/${lead.id}`}
+                className="data-card-title text-primary hover:underline"
+              >
+                {lead.client_name}
+              </Link>
               <StatusBadge status={lead.status} />
             </div>
             <div className="data-card-meta">

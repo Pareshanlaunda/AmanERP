@@ -12,6 +12,12 @@ export function revalidateLeadMutation(leadId: string) {
   revalidatePath("/employee/dashboard");
 }
 
+export function revalidateAfterLeadCreated(leadId?: string) {
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/leads/new");
+  if (leadId) revalidateLeadPages(leadId);
+}
+
 /** User/admin list pages still need SSR refresh after structural changes. */
 export function revalidateAdminLists() {
   revalidatePath("/admin/users");
@@ -21,6 +27,16 @@ export function revalidateAdminLists() {
 
 export function revalidateAfterUserCreated() {
   revalidateAdminLists();
+}
+
+export function revalidateAfterEmployeeMembershipChange(employeeId: string) {
+  revalidateAdminLists();
+  revalidateEmployeeDetail(employeeId);
+}
+
+/** @deprecated use revalidateAfterEmployeeMembershipChange */
+export function revalidateAfterEmployeeDeactivated(employeeId: string) {
+  revalidateAfterEmployeeMembershipChange(employeeId);
 }
 
 export function revalidateEmployeeDetail(employeeId: string) {

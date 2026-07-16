@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { markLeadInProgress } from "@/lib/actions/leads";
 import { LeadOutcomeForm } from "@/components/employee/lead-outcome-form";
@@ -13,10 +14,10 @@ import { LeadCommentsPanel } from "@/components/shared/lead-comments-panel";
 import { LeadTimelinePanel } from "@/components/shared/lead-timeline-panel";
 import { useLeadLive } from "@/components/shared/lead-live-provider";
 import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
+import { PageTabs } from "@/components/shared/page-tabs";
 import { useRealtimeRecord } from "@/lib/hooks/use-realtime-record";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 
 type LeadDetailPanelProps = {
   currentUserId: string;
@@ -28,43 +29,16 @@ type LeadDetailPanelProps = {
   clientId?: string | null;
 };
 
-export function LeadDetailPanel({
-  currentUserId,
-  updates,
-  comments,
-  hasUnreadComments,
-  authorNames,
-  clientId,
-}: Omit<LeadDetailPanelProps, "lead">) {
-  const { lead, setLeadOptimistic } = useLeadLive();
-  const initialOnboardingRecord = useMemo(
-    () =>
-      lead.onboarding_record_id && clientId
-        ? ({ id: lead.onboarding_record_id, client_id: clientId } as ClientOnboarding)
-        : null,
-    [lead.onboarding_record_id, clientId]
-  );
-  const liveOnboarding = useRealtimeRecord({
-    table: "client_onboardings",
-    recordId: lead.onboarding_record_id,
-    initialRecord: initialOnboardingRecord,
-    channelName: `employee-lead-onboarding:${lead.id}`,
-  });
-  const liveClientId = liveOnboarding?.client_id ?? clientId;
-  const [isPending, startTransition] = useTransition();
-
-  function handleStartProgress() {
-    startTransition(async () => {
-      setLeadOptimistic({ status: "in_progress" });
-      const result = await markLeadInProgress(lead.id);
-      if (!result.success) {
-        setLeadOptimistic({ status: "assigned" });
-        toast.error(result.error);
-      } else {
-        toast.success("Lead is now in progress");
-      }
-    });
-  }
+function EmployeeLeadDetailsTab({
+  liveClientId,
+  isPending,
+  onStartProgress,
+}: {
+  liveClientId?: string | null;
+  isPending: boolean;
+  onStartProgress: () => void;
+}) {
+  const { lead } = useLeadLive();
 
   return (
     <div className="space-y-6">
@@ -84,24 +58,9 @@ export function LeadDetailPanel({
         </div>
       </section>
 
-      <LeadCommentsPanel
-        leadId={lead.id}
-        currentUserId={currentUserId}
-        comments={comments}
-        hasUnread={hasUnreadComments}
-        authorNames={authorNames}
-      />
-
-      <WhatsAppChatPanel
-        leadId={lead.id}
-        clientName={lead.client_name}
-        clientPhone={lead.client_phone}
-        enabled={lead.source === "whatsapp"}
-      />
-
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {lead.status === "assigned" && (
-          <Button onClick={handleStartProgress} disabled={isPending} className="w-full sm:w-auto">
+          <Button onClick={onStartProgress} disabled={isPending} className="w-full sm:w-auto">
             Start progress
           </Button>
         )}
@@ -133,8 +92,92 @@ export function LeadDetailPanel({
           </div>
         </section>
       )}
-
-      <LeadTimelinePanel leadId={lead.id} initialUpdates={updates} />
     </div>
+  );
+}
+
+export function LeadDetailPanel({
+  currentUserId,
+  updates,
+  comments,
+  hasUnreadComments,
+  authorNames,
+  clientId,
+}: Omit<LeadDetailPanelProps, "lead">) {
+  const { lead, setLeadOptimistic } = useLeadLive();
+  const initialOnboardingRecord = useMemo(
+    () =>
+      lead.onboarding_record_id && clientId
+        ? ({ id: lead.onboarding_record_id, client_id: clientId } as ClientOnboarding)
+        : null,
+    [lead.onboarding_record_id, clientId]
+  );
+  const liveOnboarding = useRealtimeRecord({
+    table: "client_onboardings",
+    recordId: lead.onboarding_record_id,
+    initialRecord: initialOnboardingRecord,
+    channelName: `employee-lead-onboarding:${lead.id}`,
+  });
+  const liveClientId = liveOnboarding?.client_id ?? clientId;
+  const [isPending, startTransition] = useTransition();
+  const showWhatsApp = lead.source === "whatsapp";
+
+  function handleStartProgress() {
+    startTransition(async () => {
+      setLeadOptimistic({ status: "in_progress" });
+      const result = await markLeadInProgress(lead.id);
+      if (!result.success) {
+        setLeadOptimistic({ status: "assigned" });
+        toast.error(result.error);
+      } else {
+        toast.success("Lead is now in progress");
+      }
+    });
+  }
+
+  return (
+    <PageTabs
+      tabs={[
+        { id: "details", label: "Details", number: 1 },
+        { id: "comments", label: "Comments", number: 2 },
+        { id: "whatsapp", label: "WhatsApp", number: 3, hidden: !showWhatsApp },
+        { id: "activity", label: "Activity", number: showWhatsApp ? 4 : 3 },
+      ]}
+    >
+      {(activeTabId) => (
+        <div className="space-y-6">
+          {activeTabId === "details" && (
+            <EmployeeLeadDetailsTab
+              liveClientId={liveClientId}
+              isPending={isPending}
+              onStartProgress={handleStartProgress}
+            />
+          )}
+
+          {activeTabId === "comments" && (
+            <LeadCommentsPanel
+              leadId={lead.id}
+              currentUserId={currentUserId}
+              comments={comments}
+              hasUnread={hasUnreadComments}
+              authorNames={authorNames}
+            />
+          )}
+
+          {activeTabId === "whatsapp" && showWhatsApp && (
+            <WhatsAppChatPanel
+              leadId={lead.id}
+              clientName={lead.client_name}
+              clientPhone={lead.client_phone}
+              enabled
+            />
+          )}
+
+          {activeTabId === "activity" && (
+            <LeadTimelinePanel leadId={lead.id} initialUpdates={updates} />
+          )}
+        </div>
+      )}
+    </PageTabs>
   );
 }

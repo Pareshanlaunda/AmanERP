@@ -9,15 +9,19 @@ import { LeadsTable } from "@/components/admin/leads-table";
 import { LostLeadsTable } from "@/components/admin/lost-leads-table";
 import { ClientsTable } from "@/components/dashboard/clients-table";
 import { CollapsiblePanel } from "@/components/shared/collapsible-panel";
+import { EmployeeRemovalPanel } from "@/components/admin/employee-removal-panel";
+import type { Profile } from "@/lib/types/database";
 
 type RealtimeEmployeeDetailSectionsProps = {
   employeeId: string;
   initial: EmployeeDetail;
+  employees: (Profile & { email?: string })[];
 };
 
 export function RealtimeEmployeeDetailSections({
   employeeId,
   initial,
+  employees,
 }: RealtimeEmployeeDetailSectionsProps) {
   const [detail, setDetail] = useState(initial);
   const [activeQuery, setActiveQuery] = useState("");
@@ -67,6 +71,17 @@ export function RealtimeEmployeeDetailSections({
 
   return (
     <>
+      <EmployeeRemovalPanel
+        employeeId={employeeId}
+        employeeName={detail.full_name ?? "Employee"}
+        isActive={detail.is_active !== false}
+        deactivatedAt={detail.deactivated_at}
+        leads={detail.leads}
+        clients={detail.clients}
+        employees={employees}
+        onReassigned={refresh}
+      />
+
       <section className="erp-panel overflow-hidden">
         <div className="border-b border-border/70 bg-accent/30 px-4 py-4 sm:px-6">
           <h2 className="section-title">Summary</h2>

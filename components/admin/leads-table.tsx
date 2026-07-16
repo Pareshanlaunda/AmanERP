@@ -72,13 +72,20 @@ export function LeadsTable({
               <TableHead>Status</TableHead>
               {!hideAssignedColumn && <TableHead>Assigned To</TableHead>}
               <TableHead>Created</TableHead>
-              <TableHead></TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {leads.map((lead) => (
               <TableRow key={lead.id}>
-                <TableCell className="font-medium">{lead.client_name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`${linkPrefix}/${lead.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {lead.client_name}
+                  </Link>
+                </TableCell>
                 <TableCell>{lead.client_phone ?? "—"}</TableCell>
                 <TableCell>
                   <SourceBadge source={lead.source} />
@@ -97,12 +104,6 @@ export function LeadsTable({
                 <TableCell>{formatDate(lead.created_at)}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href={`${linkPrefix}/${lead.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      View
-                    </Link>
                     {lead.source === "whatsapp" && (
                       <Link
                         href={`${linkPrefix}/${lead.id}#whatsapp-chat`}
@@ -124,7 +125,12 @@ export function LeadsTable({
           <div key={lead.id} className="data-card">
             <div className="data-card-header">
               <div className="min-w-0">
-                <div className="data-card-title">{lead.client_name}</div>
+                <Link
+                  href={`${linkPrefix}/${lead.id}`}
+                  className="data-card-title text-primary hover:underline"
+                >
+                  {lead.client_name}
+                </Link>
                 <p className="mt-1 text-muted-foreground">{lead.client_phone ?? "No phone"}</p>
               </div>
               <StatusBadge status={lead.status} />
@@ -140,9 +146,6 @@ export function LeadsTable({
               <p>Created: {formatDate(lead.created_at)}</p>
             </div>
             <div className="data-card-actions">
-              <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
-                <Link href={`${linkPrefix}/${lead.id}`}>View lead</Link>
-              </Button>
               {lead.source === "whatsapp" && (
                 <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
                   <Link href={`${linkPrefix}/${lead.id}#whatsapp-chat`}>Chat</Link>

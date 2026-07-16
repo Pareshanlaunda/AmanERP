@@ -78,6 +78,11 @@ export function UsersTable({ users }: UsersTableProps) {
                       ) : (
                         (user.full_name ?? "—")
                       )}
+                      {user.role === "employee" && user.is_active === false ? (
+                        <span className="ml-2 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                          Removed
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell>{user.email ?? "—"}</TableCell>
                     <TableCell className="capitalize">{user.role}</TableCell>
