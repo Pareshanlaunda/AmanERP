@@ -246,6 +246,12 @@ export async function saveClientNotice(
 
   revalidatePath("/employee/dashboard");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/clients");
+  revalidatePath(`/admin/clients/${parsed.data.client_onboarding_id}`);
+  revalidatePath(`/employee/clients/${parsed.data.client_onboarding_id}`);
+  if (client.submitted_by) {
+    revalidatePath(`/admin/employees/${client.submitted_by}`);
+  }
 
   return { success: true, data: { noticeId: row.id as string } };
 }

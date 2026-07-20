@@ -52,12 +52,17 @@ export function NoticeSelectButton({
     }
   }
 
-  function handleView() {
+  async function handleView() {
     if (!noticeId) {
       toast.error("No saved notice yet — generate and save first");
       return;
     }
-    viewNoticeInNewTab(noticeId);
+    try {
+      await viewNoticeInNewTab(noticeId);
+    } catch (e) {
+      console.error("[notice view]", e);
+      toast.error(e instanceof Error ? e.message : "Unable to open notice");
+    }
   }
 
   return (

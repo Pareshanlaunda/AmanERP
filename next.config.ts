@@ -46,6 +46,9 @@ const nextConfig: NextConfig = {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob:",
           "font-src 'self'",
+          // blob: needed if we ever embed generated PDFs; default-src 'self' blocks blob iframes
+          "frame-src 'self' blob:",
+          "object-src 'self' blob:",
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",

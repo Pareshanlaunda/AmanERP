@@ -186,6 +186,8 @@ export function RealtimeEmployeeDetailSections({
         <ClientsTable
           clients={filteredClients}
           showClientId
+          showNotice
+          latestNoticeIds={detail.latestNoticeIds}
           viewLinkPrefix="/admin/clients"
           emptyMessage={
             detail.clients.length > 0 && filteredClients.length === 0

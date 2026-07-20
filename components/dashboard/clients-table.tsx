@@ -31,6 +31,9 @@ type ClientsTableProps = {
   /** Show Notice / Select column (admin + employee client lists). */
   showNotice?: boolean;
   latestNoticeIds?: Record<string, string>;
+  /** Owner column — submitted_by → display name (admin registry). */
+  showOwner?: boolean;
+  ownerNames?: Record<string, string>;
 };
 
 export function ClientsTable({
@@ -41,6 +44,8 @@ export function ClientsTable({
   emptyMessage,
   showNotice = true,
   latestNoticeIds,
+  showOwner = false,
+  ownerNames = EMPTY_NOTICE_IDS,
 }: ClientsTableProps) {
   const noticeSource = latestNoticeIds ?? EMPTY_NOTICE_IDS;
   const [query, setQuery] = useState("");
@@ -87,6 +92,7 @@ export function ClientsTable({
                   <TableHead>Phone</TableHead>
                   <TableHead>Loan Amount</TableHead>
                   <TableHead>Advocate</TableHead>
+                  {showOwner ? <TableHead>Owner</TableHead> : null}
                   <TableHead>Submitted</TableHead>
                   {showNotice ? <TableHead>Notice</TableHead> : null}
                   {showActions ? <TableHead></TableHead> : null}
@@ -105,6 +111,13 @@ export function ClientsTable({
                     <TableCell>{client.client_contact_number ?? "—"}</TableCell>
                     <TableCell>{formatCurrency(client.loan_amount)}</TableCell>
                     <TableCell>{client.advocate_name}</TableCell>
+                    {showOwner ? (
+                      <TableCell>
+                        {client.submitted_by
+                          ? ownerNames[client.submitted_by] ?? "—"
+                          : "—"}
+                      </TableCell>
+                    ) : null}
                     <TableCell>{formatDate(client.created_at)}</TableCell>
                     {showNotice ? (
                       <TableCell>
@@ -149,6 +162,14 @@ export function ClientsTable({
                   <p>{client.client_contact_number ?? "No phone"}</p>
                   <p>Loan: {formatCurrency(client.loan_amount)}</p>
                   <p>Advocate: {client.advocate_name}</p>
+                  {showOwner ? (
+                    <p>
+                      Owner:{" "}
+                      {client.submitted_by
+                        ? ownerNames[client.submitted_by] ?? "—"
+                        : "—"}
+                    </p>
+                  ) : null}
                   <p>Submitted: {formatDate(client.created_at)}</p>
                 </div>
                 {showNotice || showActions ? (

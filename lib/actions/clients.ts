@@ -10,9 +10,51 @@ import {
   normalizeAdditionalAssigneeIds,
   replaceAdditionalAssignees,
 } from "@/lib/leads/assignees";
+import { fetchAdminClientsPage } from "@/lib/clients/fetch-admin-clients-page";
+import { getLatestNoticeIdsForClients } from "@/lib/actions/notices";
 import { assignClientSchema, type AssignClientInput } from "@/lib/validations/clients";
+import type { ClientOnboarding } from "@/lib/validations/onboarding";
 
 export type ActionResult = { success: true } | { success: false; error: string };
+
+export type ListAdminClientsPageResult =
+  | {
+      success: true;
+      clients: ClientOnboarding[];
+      totalCount: number;
+      page: number;
+      pageSize: number;
+      ownerNames: Record<string, string>;
+      latestNoticeIds: Record<string, string>;
+    }
+  | { success: false; error: string };
+
+/** Admin CRM client registry — paginated + server search. */
+export async function listAdminClientsPage(params?: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+}): Promise<ListAdminClientsPageResult> {
+  await requireUserWithRole(["admin"]);
+
+  try {
+    const supabase = await createClient();
+    const result = await fetchAdminClientsPage(supabase, params);
+    const latestNoticeIds = await getLatestNoticeIdsForClients(
+      result.clients.map((c) => c.id)
+    );
+    return { success: true, ...result, latestNoticeIds };
+  } catch (error) {
+    const detail =
+      error && typeof error === "object" && "message" in error
+        ? (error as { message?: string })
+        : null;
+    return {
+      success: false,
+      error: publicActionError("Unable to load clients", detail),
+    };
+  }
+}
 
 export async function assignClient(data: AssignClientInput): Promise<ActionResult> {
   const user = await requireUserWithRole(["admin"]);
