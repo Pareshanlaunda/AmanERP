@@ -4,7 +4,7 @@ import { requireUserWithRole } from "@/lib/auth/get-user";
 import { getEmployeesOverview } from "@/lib/actions/employees";
 import { getNotifications } from "@/lib/actions/notifications";
 import { createClient } from "@/lib/supabase/server";
-import { AppHeader } from "@/components/shared/app-header";
+import { AppHeader, HeaderLink } from "@/components/shared/app-header";
 import { DashboardRecentLeads } from "@/components/admin/dashboard-recent-leads";
 import { RealtimeEmployeesOverview } from "@/components/admin/realtime-employees-overview";
 import { SuccessToast } from "@/components/dashboard/success-toast";
@@ -52,6 +52,7 @@ export default async function AdminDashboardPage() {
         userId={current.id}
         notifications={notifications}
         leadLinkPrefix="/admin/leads"
+        actions={<HeaderLink href="/admin/clients">All clients</HeaderLink>}
       />
       <main className="page-container space-y-6 sm:space-y-8">
         <Suspense fallback={null}>

@@ -9,10 +9,12 @@ import type { Lead } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { AppHeader } from "@/components/shared/app-header";
 import { AssignClientForm } from "@/components/admin/assign-client-form";
+import { ClientNoticePanel } from "@/components/shared/client-notice-panel";
 import { LiveClientOnboardingDetails } from "@/components/shared/live-client-onboarding-details";
 import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
 import { Button } from "@/components/ui/button";
 import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
+import { getLatestNoticeIdsForClients } from "@/lib/actions/notices";
 
 export default async function AdminClientDetailPage({
   params,
@@ -36,20 +38,22 @@ export default async function AdminClientDetailPage({
     ? `/admin/leads/${typedClient.lead_id}`
     : "/admin/dashboard";
 
-  const [notifications, employees, linkedLeadResult, additionalIds] = await Promise.all([
-    getNotifications(),
-    getEmployeeProfilesForAdmin(),
-    typedClient.lead_id
-      ? supabase
-          .from("leads")
-          .select("id, source, client_name, client_phone")
-          .eq("id", typedClient.lead_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    typedClient.lead_id
-      ? listAdditionalAssigneeIds(supabase, typedClient.lead_id)
-      : Promise.resolve([] as string[]),
-  ]);
+  const [notifications, employees, linkedLeadResult, additionalIds, noticeMap] =
+    await Promise.all([
+      getNotifications(),
+      getEmployeeProfilesForAdmin(),
+      typedClient.lead_id
+        ? supabase
+            .from("leads")
+            .select("id, source, client_name, client_phone")
+            .eq("id", typedClient.lead_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      typedClient.lead_id
+        ? listAdditionalAssigneeIds(supabase, typedClient.lead_id)
+        : Promise.resolve([] as string[]),
+      getLatestNoticeIdsForClients([typedClient.id]),
+    ]);
 
   const linkedLead =
     (linkedLeadResult.data as Pick<
@@ -102,6 +106,11 @@ export default async function AdminClientDetailPage({
           currentOwnerId={typedClient.submitted_by}
           currentAdditionalIds={additionalIds}
           hasLinkedLead={Boolean(typedClient.lead_id)}
+        />
+
+        <ClientNoticePanel
+          client={typedClient}
+          latestNoticeId={noticeMap[typedClient.id] ?? null}
         />
 
         <LiveClientOnboardingDetails clientId={typedClient.id} initialClient={typedClient} />

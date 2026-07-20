@@ -10,6 +10,7 @@ import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { listAdditionalAssigneeIdsForLeads } from "@/lib/leads/assignees";
 import { attachLeadSourcesToClients } from "@/lib/leads/attach-lead-sources";
 import { isActivePipelineLeadStatus } from "@/lib/leads/lead-status";
+import { getLatestNoticeIdsForClients } from "@/lib/actions/notices";
 
 /** Soft cap for detail tables; stats RPC remains uncapped. */
 const EMPLOYEE_DETAIL_LIST_LIMIT = 1000;
@@ -277,6 +278,8 @@ export type EmployeeDetail = EmployeeStats & {
   activeLeads: Lead[];
   lostLeads: Lead[];
   clients: ClientOnboarding[];
+  /** client_onboarding_id → latest client_notices.id */
+  latestNoticeIds: Record<string, string>;
 };
 
 export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDetail> {
@@ -346,6 +349,7 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
     admin,
     (clientsRes.data ?? []) as ClientOnboarding[]
   );
+  const latestNoticeIds = await getLatestNoticeIdsForClients(clients.map((c) => c.id));
 
   return {
     ...employee,
@@ -353,5 +357,6 @@ export async function getEmployeeDetail(employeeId: string): Promise<EmployeeDet
     activeLeads,
     lostLeads,
     clients,
+    latestNoticeIds,
   };
 }

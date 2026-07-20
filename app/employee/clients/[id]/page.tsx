@@ -8,7 +8,9 @@ import { listAdditionalAssigneeIds } from "@/lib/leads/assignees";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead } from "@/lib/types/database";
 import type { ClientOnboarding } from "@/lib/validations/onboarding";
+import { getLatestNoticeIdsForClients } from "@/lib/actions/notices";
 import { AppHeader } from "@/components/shared/app-header";
+import { ClientNoticePanel } from "@/components/shared/client-notice-panel";
 import { LiveClientOnboardingDetails } from "@/components/shared/live-client-onboarding-details";
 import { WhatsAppChatPanel } from "@/components/shared/whatsapp-chat-panel";
 import { Button } from "@/components/ui/button";
@@ -21,16 +23,15 @@ export default async function EmployeeClientDetailPage({
   const current = await requireUserWithRole(["employee"]);
   const { id } = await params;
   const supabase = await createClient();
-  const notifications = await getNotifications();
 
   const access = await assertClientAccess(supabase, id, current.id, current.role);
   if (!access.ok) notFound();
 
-  const { data: client } = await supabase
-    .from("client_onboardings")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: client }, notifications, noticeMap] = await Promise.all([
+    supabase.from("client_onboardings").select("*").eq("id", id).maybeSingle(),
+    getNotifications(),
+    getLatestNoticeIdsForClients([id]),
+  ]);
 
   if (!client) notFound();
 
@@ -85,6 +86,10 @@ export default async function EmployeeClientDetailPage({
             </Button>
           )}
         </div>
+        <ClientNoticePanel
+          client={typedClient}
+          latestNoticeId={noticeMap[typedClient.id] ?? null}
+        />
         <LiveClientOnboardingDetails clientId={typedClient.id} initialClient={typedClient} />
         {canChat && linkedLead && (
           <WhatsAppChatPanel

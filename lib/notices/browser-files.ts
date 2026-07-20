@@ -1,10 +1,14 @@
 /** Client-side helpers for notice file download / view. */
 
-export async function downloadNoticeFile(
+async function fetchNoticeBlob(
   noticeId: string,
-  format: "docx" | "pdf" | "xlsx" = "docx"
-): Promise<void> {
-  const res = await fetch(`/api/notices/${noticeId}/download?format=${format}`, {
+  format: "docx" | "pdf" | "xlsx",
+  inline = false
+): Promise<{ blob: Blob; filename: string }> {
+  const qs = new URLSearchParams({ format });
+  if (inline) qs.set("inline", "1");
+
+  const res = await fetch(`/api/notices/${noticeId}/download?${qs}`, {
     method: "GET",
     credentials: "same-origin",
   });
@@ -30,6 +34,15 @@ export async function downloadNoticeFile(
   const fallback = `notice.${format}`;
   const filename = match?.[1] ? decodeURIComponent(match[1]) : fallback;
 
+  return { blob, filename };
+}
+
+export async function downloadNoticeFile(
+  noticeId: string,
+  format: "docx" | "pdf" | "xlsx" = "docx"
+): Promise<void> {
+  const { blob, filename } = await fetchNoticeBlob(noticeId, format);
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -41,7 +54,20 @@ export async function downloadNoticeFile(
   URL.revokeObjectURL(url);
 }
 
-/** Open notice PDF in a new tab (inline preview). */
-export function viewNoticeInNewTab(noticeId: string): void {
-  window.open(`/notices/${noticeId}/view`, "_blank", "noopener,noreferrer");
+/**
+ * Open PDF in a new tab (top-level navigation — native browser viewer).
+ * Avoids iframe/blob CSP + X-Frame-Options blocks ("site blocked / contact owner").
+ */
+export async function viewNoticeInNewTab(noticeId: string): Promise<void> {
+  const opened = window.open(
+    `/api/notices/${noticeId}/download?format=pdf&inline=1`,
+    "_blank",
+    "noopener,noreferrer"
+  );
+  if (!opened) {
+    // Popup blocked — same-tab fallback
+    window.location.assign(
+      `/api/notices/${noticeId}/download?format=pdf&inline=1`
+    );
+  }
 }
