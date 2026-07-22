@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { markLeadInProgress } from "@/lib/actions/leads";
+import { markLeadInProgress, markLeadSuccessful } from "@/lib/actions/leads";
 import type { Lead, LeadStatus } from "@/lib/types/database";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -27,15 +27,25 @@ export function AssignedLeadsTable({
 }) {
   const [isPending, startTransition] = useTransition();
   const [statusOverrides, setStatusOverrides] = useState<Record<string, LeadStatus>>({});
+  const [pendingLeadId, setPendingLeadId] = useState<string | null>(null);
 
-  const displayLeads = leads.map((lead) =>
-    statusOverrides[lead.id] ? { ...lead, status: statusOverrides[lead.id] } : lead
-  );
+  const displayLeads = leads
+    .map((lead) =>
+      statusOverrides[lead.id] ? { ...lead, status: statusOverrides[lead.id] } : lead
+    )
+    .filter(
+      (lead) =>
+        lead.status !== "converted" &&
+        lead.status !== "lost" &&
+        lead.status !== "successful"
+    );
 
   function handleStartProgress(leadId: string) {
     startTransition(async () => {
+      setPendingLeadId(leadId);
       setStatusOverrides((prev) => ({ ...prev, [leadId]: "in_progress" }));
       const result = await markLeadInProgress(leadId);
+      setPendingLeadId(null);
       if (!result.success) {
         setStatusOverrides((prev) => {
           const next = { ...prev };
@@ -46,6 +56,28 @@ export function AssignedLeadsTable({
       } else {
         toast.success("Lead marked in progress");
       }
+    });
+  }
+
+  function handleMarkSuccessful(leadId: string) {
+    startTransition(async () => {
+      setPendingLeadId(leadId);
+      setStatusOverrides((prev) => ({ ...prev, [leadId]: "converted" }));
+      const result = await markLeadSuccessful(leadId);
+      setPendingLeadId(null);
+      if (!result.success) {
+        setStatusOverrides((prev) => {
+          const next = { ...prev };
+          delete next[leadId];
+          return next;
+        });
+        toast.error(result.error);
+        return;
+      }
+      if (result.warning) toast.warning(result.warning);
+      toast.success(
+        result.warning ? "Lead converted to client" : "Lead converted to client — admin notified"
+      );
     });
   }
 
@@ -103,20 +135,25 @@ export function AssignedLeadsTable({
                     {lead.status === "assigned" && (
                       <Button
                         size="sm"
-                        disabled={isPending}
+                        disabled={isPending && pendingLeadId === lead.id}
                         onClick={() => handleStartProgress(lead.id)}
                       >
                         Start Progress
                       </Button>
                     )}
-                    {lead.status === "in_progress" && (
+                    {lead.status === "in_progress" && !lead.onboarding_record_id && (
                       <Button size="sm" asChild>
                         <Link href={`/onboarding/new?leadId=${lead.id}`}>Onboard Client</Link>
                       </Button>
                     )}
                     {lead.onboarding_record_id && lead.status === "in_progress" && (
-                      <Button variant="secondary" size="sm" asChild>
-                        <Link href={`/employee/leads/${lead.id}`}>Mark Successful</Link>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isPending && pendingLeadId === lead.id}
+                        onClick={() => handleMarkSuccessful(lead.id)}
+                      >
+                        {isPending && pendingLeadId === lead.id ? "Saving..." : "Mark Successful"}
                       </Button>
                     )}
                   </div>
@@ -158,21 +195,27 @@ export function AssignedLeadsTable({
               {lead.status === "assigned" && (
                 <Button
                   size="sm"
-                  disabled={isPending}
+                  disabled={isPending && pendingLeadId === lead.id}
                   onClick={() => handleStartProgress(lead.id)}
                   className="w-full sm:w-auto"
                 >
                   Start progress
                 </Button>
               )}
-              {lead.status === "in_progress" && (
+              {lead.status === "in_progress" && !lead.onboarding_record_id && (
                 <Button size="sm" asChild className="w-full sm:w-auto">
                   <Link href={`/onboarding/new?leadId=${lead.id}`}>Onboard</Link>
                 </Button>
               )}
               {lead.onboarding_record_id && lead.status === "in_progress" && (
-                <Button variant="secondary" size="sm" asChild className="w-full sm:w-auto">
-                  <Link href={`/employee/leads/${lead.id}`}>Mark successful</Link>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isPending && pendingLeadId === lead.id}
+                  onClick={() => handleMarkSuccessful(lead.id)}
+                  className="w-full sm:w-auto"
+                >
+                  {isPending && pendingLeadId === lead.id ? "Saving..." : "Mark successful"}
                 </Button>
               )}
             </div>

@@ -30,6 +30,7 @@ export function EmployeeDashboardContent({
   const [leadQuery, setLeadQuery] = useState("");
   const [clientQuery, setClientQuery] = useState("");
   const [noticeIds, setNoticeIds] = useState(noticeSource);
+  const [hiddenClientIds, setHiddenClientIds] = useState(() => new Set<string>());
 
   useEffect(() => {
     setNoticeIds(noticeSource);
@@ -63,9 +64,11 @@ export function EmployeeDashboardContent({
 
   const includeClient = useCallback(
     (client: ClientOnboarding) =>
-      client.submitted_by === userId ||
-      (Boolean(client.lead_id) && assignedLeadIds.has(client.lead_id as string)),
-    [userId, assignedLeadIds]
+      !client.archived_at &&
+      !hiddenClientIds.has(client.id) &&
+      (client.submitted_by === userId ||
+        (Boolean(client.lead_id) && assignedLeadIds.has(client.lead_id as string))),
+    [userId, assignedLeadIds, hiddenClientIds]
   );
 
   const liveClients = useRealtimeRows({
@@ -79,8 +82,19 @@ export function EmployeeDashboardContent({
   });
 
   const filteredClients = useMemo(
-    () => filterClients(liveClients, clientQuery),
-    [liveClients, clientQuery]
+    () =>
+      filterClients(liveClients, clientQuery).filter(
+        (client) => !hiddenClientIds.has(client.id) && !client.archived_at
+      ),
+    [liveClients, clientQuery, hiddenClientIds]
+  );
+
+  const visibleClientCount = useMemo(
+    () =>
+      liveClients.filter(
+        (client) => !hiddenClientIds.has(client.id) && !client.archived_at
+      ).length,
+    [liveClients, hiddenClientIds]
   );
 
   return (
@@ -109,7 +123,7 @@ export function EmployeeDashboardContent({
         <div>
           <h2 className="section-title">My clients</h2>
           <p className="section-subtitle">
-            {filteredClients.length} of {liveClients.length} clients (yours + assigned leads)
+            {filteredClients.length} of {visibleClientCount} clients (yours + assigned leads)
           </p>
         </div>
         <SearchBar
@@ -124,8 +138,11 @@ export function EmployeeDashboardContent({
           onNoticeSaved={(clientId, noticeId) =>
             setNoticeIds((prev) => ({ ...prev, [clientId]: noticeId }))
           }
+          onClientRemoved={(clientId) =>
+            setHiddenClientIds((prev) => new Set(prev).add(clientId))
+          }
           emptyMessage={
-            liveClients.length > 0 && filteredClients.length === 0
+            visibleClientCount > 0 && filteredClients.length === 0
               ? "No clients match your search."
               : undefined
           }

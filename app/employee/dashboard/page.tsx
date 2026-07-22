@@ -35,8 +35,9 @@ export default async function EmployeeDashboardPage() {
     supabase
       .from("client_onboardings")
       .select(
-        "id, client_id, client_name, client_email, client_contact_number, loan_amount, advocate_name, created_at, submitted_by, lead_id"
+        "id, client_id, client_name, client_email, client_contact_number, loan_amount, advocate_name, created_at, submitted_by, lead_id, archived_at"
       )
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(500),
   ]);

@@ -55,6 +55,16 @@ const MIGRATION_FILES = [
   "supabase/migration-v24-client-notices.sql",
   "supabase/migration-v25-profile-address-mobile.sql",
   "supabase/migration-v26-empid-clid-daily.sql",
+  "supabase/migration-v27-prod-security.sql",
+  "supabase/migration-v28-employee-stats-service-role.sql",
+  "supabase/migration-v29-employee-stats-additional-assignees.sql",
+  "supabase/migration-v30-lead-status-guard.sql",
+  "supabase/migration-v31-onboarding-lead-unique.sql",
+  "supabase/migration-v32-whatsapp-phone-unique-and-assignees-rpc.sql",
+  "supabase/migration-v33-assignee-rpc-revoke-authenticated.sql",
+  "supabase/migration-v34-subscriber-unique-and-comment-reads.sql",
+  "supabase/migration-v35-profile-deactivate.sql",
+  "supabase/migration-v36-client-archive.sql",
 ];
 
 function getDatabaseUrls() {

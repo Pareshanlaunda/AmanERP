@@ -107,6 +107,7 @@ export function LeadOutcomeForm({ leadId, clientName, canMarkSuccessful }: LeadO
             ? "Lead converted to client"
             : "Lead converted to client — admin notified"
         );
+        router.push("/employee/dashboard");
         return;
       }
 

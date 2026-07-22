@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { publicActionError } from "@/lib/errors/public-error";
 import {
   revalidateAfterLeadCreated,
+  revalidateClientPages,
   revalidateEmployeeDetail,
   revalidateLeadMutation,
 } from "@/lib/revalidate";
@@ -132,14 +133,15 @@ async function insertLeadUpdate(
   return null;
 }
 
-/** Undo a committed status write when audit trail insert fails. */
+/** Undo a committed status write when audit trail insert fails.
+ * Service role: employee trigger blocks clearing converted_onboarding_id. */
 async function restoreLeadStatusAfterTrailFail(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   leadId: string,
   fromStatus: string,
   restorePatch: Record<string, unknown>
 ): Promise<string> {
-  const { error } = await supabase
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("leads")
     .update({ ...restorePatch, updated_at: new Date().toISOString() })
     .eq("id", leadId)
@@ -644,7 +646,7 @@ export async function markLeadInProgress(leadId: string): Promise<ActionResult> 
   if (trailError) {
     return {
       success: false,
-      error: await restoreLeadStatusAfterTrailFail(supabase, idParsed.data, "in_progress", {
+      error: await restoreLeadStatusAfterTrailFail(idParsed.data, "in_progress", {
         status: "assigned",
       }),
     };
@@ -670,7 +672,7 @@ export async function markLeadSuccessful(
     id: string;
     status: string;
     client_name: string;
-    created_by: string;
+    created_by: string | null;
     onboarding_record_id: string | null;
     assigned_to: string | null;
   }>(
@@ -692,6 +694,22 @@ export async function markLeadSuccessful(
     return { success: false, error: "Complete the onboarding form first" };
   }
 
+  const { data: onboarding, error: onboardingError } = await supabase
+    .from("client_onboardings")
+    .select("id, client_id")
+    .eq("id", lead.onboarding_record_id)
+    .maybeSingle();
+
+  if (onboardingError) {
+    return {
+      success: false,
+      error: publicActionError("Unable to verify onboarding", onboardingError),
+    };
+  }
+  if (!onboarding?.client_id) {
+    return { success: false, error: "Onboarding incomplete — CLID missing. Re-submit onboarding." };
+  }
+
   const updated = await updateLeadIfStatus(supabase, idParsed.data, "in_progress", {
     status: "converted",
     converted_onboarding_id: lead.onboarding_record_id,
@@ -703,7 +721,7 @@ export async function markLeadSuccessful(
 
   const note = outcome
     ? formatOutcomeSummary(outcome.category, outcome.reason, outcome.notes)
-    : "Marked as successful — lead converted to client";
+    : `Marked as successful — converted to client ${onboarding.client_id}`;
 
   const trailError = await insertLeadUpdate(supabase, {
     lead_id: idParsed.data,
@@ -716,7 +734,7 @@ export async function markLeadSuccessful(
   if (trailError) {
     return {
       success: false,
-      error: await restoreLeadStatusAfterTrailFail(supabase, idParsed.data, "converted", {
+      error: await restoreLeadStatusAfterTrailFail(idParsed.data, "converted", {
         status: "in_progress",
         converted_onboarding_id: null,
         latest_outcome_category: null,
@@ -725,15 +743,19 @@ export async function markLeadSuccessful(
     };
   }
 
-  const notified = await createNotification({
-    user_id: lead.created_by,
-    type: "lead_converted",
-    title: "Lead converted to client",
-    body: `${lead.client_name} was successfully onboarded by ${user.profile.full_name ?? user.email}`,
-    lead_id: idParsed.data,
-  });
+  const notified = lead.created_by
+    ? await createNotification({
+        user_id: lead.created_by,
+        type: "lead_converted",
+        title: "Lead converted to client",
+        body: `${lead.client_name} (${onboarding.client_id}) was successfully onboarded by ${user.profile.full_name ?? user.email}`,
+        lead_id: idParsed.data,
+      })
+    : false;
 
   revalidateLeadMutation(idParsed.data);
+  revalidateEmployeeDetail(user.id);
+  revalidateClientPages(onboarding.id);
   return notified
     ? { success: true }
     : { success: true, warning: "Lead converted, but admin notification failed" };
@@ -807,7 +829,7 @@ export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionR
     if (trailError) {
       return {
         success: false,
-        error: await restoreLeadStatusAfterTrailFail(supabase, parsed.data.lead_id, "lost", {
+        error: await restoreLeadStatusAfterTrailFail(parsed.data.lead_id, "lost", {
           status: lead.status,
           lost_reason: null,
           lost_at: null,
@@ -852,7 +874,7 @@ export async function recordLeadOutcome(data: LeadOutcomeInput): Promise<ActionR
   if (trailError) {
     return {
       success: false,
-      error: await restoreLeadStatusAfterTrailFail(supabase, parsed.data.lead_id, nextStatus, {
+      error: await restoreLeadStatusAfterTrailFail(parsed.data.lead_id, nextStatus, {
         status: lead.status,
         latest_outcome_category: lead.latest_outcome_category,
         latest_outcome_reason: lead.latest_outcome_reason,

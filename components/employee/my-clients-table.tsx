@@ -5,6 +5,7 @@ import type { ClientOnboarding } from "@/lib/validations/onboarding";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ClidBadge } from "@/components/shared/clid-badge";
 import { NoticeSelectButton } from "@/components/shared/notice-select-button";
+import { RemoveClientButton } from "@/components/employee/remove-client-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { clientHasWhatsAppChat } from "@/lib/leads/attach-lead-sources";
@@ -14,11 +15,13 @@ export function MyClientsTable({
   emptyMessage,
   latestNoticeIds = {},
   onNoticeSaved,
+  onClientRemoved,
 }: {
   clients: ClientOnboarding[];
   emptyMessage?: string;
   latestNoticeIds?: Record<string, string>;
   onNoticeSaved?: (clientId: string, noticeId: string) => void;
+  onClientRemoved?: (clientId: string) => void;
 }) {
   if (clients.length === 0) {
     return (
@@ -41,7 +44,7 @@ export function MyClientsTable({
             <col className="w-[7.5rem]" />
             <col className="w-[6.5rem]" />
             <col className="w-[7.5rem]" />
-            <col className="w-[8.5rem]" />
+            <col className="w-[10.5rem]" />
           </colgroup>
           <thead>
             <tr className="bg-muted/40">
@@ -100,6 +103,11 @@ export function MyClientsTable({
                         <Link href={`/employee/clients/${client.id}#whatsapp-chat`}>Chat</Link>
                       </Button>
                     ) : null}
+                    <RemoveClientButton
+                      clientId={client.id}
+                      clientName={client.client_name}
+                      onRemoved={() => onClientRemoved?.(client.id)}
+                    />
                   </div>
                 </td>
               </tr>
@@ -140,6 +148,11 @@ export function MyClientsTable({
                   <Link href={`/employee/clients/${client.id}#whatsapp-chat`}>Chat</Link>
                 </Button>
               ) : null}
+              <RemoveClientButton
+                clientId={client.id}
+                clientName={client.client_name}
+                onRemoved={() => onClientRemoved?.(client.id)}
+              />
             </div>
           </div>
         ))}
