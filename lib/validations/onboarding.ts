@@ -150,6 +150,9 @@ export type ClientOnboarding = {
   other_comments: string | null;
   advocate_name: string;
   advocate_email: string;
+  /** Soft-removed from employee My clients; row kept for history. */
+  archived_at?: string | null;
+  archived_by?: string | null;
 };
 
 function toNullableText(value: string | undefined): string | null {

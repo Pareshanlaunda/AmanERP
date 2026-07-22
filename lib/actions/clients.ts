@@ -1,6 +1,8 @@
 "use server";
 
+import { z } from "zod";
 import { requireUserWithRole } from "@/lib/auth/get-user";
+import { assertClientAccess } from "@/lib/auth/client-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { publicActionError } from "@/lib/errors/public-error";
@@ -284,5 +286,49 @@ export async function assignClient(data: AssignClientInput): Promise<ActionResul
     leadId,
   });
 
+  return { success: true };
+}
+
+/**
+ * Soft-remove from employee My clients. Row, CLID, notices, lead links stay for history.
+ * Admin all-clients still shows the record.
+ */
+export async function archiveClient(clientId: string): Promise<ActionResult> {
+  const user = await requireUserWithRole(["employee"]);
+  const idParsed = z.string().uuid().safeParse(clientId);
+  if (!idParsed.success) {
+    return { success: false, error: "Invalid client" };
+  }
+
+  const supabase = await createClient();
+  const access = await assertClientAccess(supabase, idParsed.data, user.id, "employee");
+  if (!access.ok) {
+    return { success: false, error: access.error };
+  }
+
+  // Employees have no UPDATE RLS on onboardings — service role after access check.
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("client_onboardings")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", idParsed.data)
+    .is("archived_at", null)
+    .select("id");
+
+  if (error) {
+    return { success: false, error: publicActionError("Unable to remove client", error) };
+  }
+  if (!data?.length) {
+    return { success: false, error: "Client already removed from dashboard" };
+  }
+
+  revalidateClientMutation(idParsed.data, {
+    previousOwnerId: access.client.submitted_by,
+    leadId: access.client.lead_id,
+  });
   return { success: true };
 }
